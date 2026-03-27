@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Gauntris</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-container">
+
+    <!-- Portrait HUD (shown only in portrait mode) -->
+    <div id="hud-top" style="display:none">
+      <span id="hud-level">Lv 1</span>
+      <span id="hud-score">Score: 0</span>
+      <span id="hud-hp">HP 30/30</span>
+      <div id="hud-hp-bar-wrap"><div id="hud-hp-bar"></div></div>
+      <canvas id="next-piece-canvas" width="48" height="48" title="Next piece"></canvas>
+    </div>
+
+    <!-- Main game canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Portrait on-screen controls -->
+    <div id="btn-panel" style="display:none">
+      <div id="btn-row-info">
+        <span class="ctrl-hint">Z=Rot↺ &nbsp; X=Rot↻ &nbsp; Space=Place</span>
+      </div>
+      <div id="btn-row-main">
+        <div id="btn-rotate-group">
+          <button id="btn-rotccw" class="btn-ctrl">↺</button>
+          <button id="btn-rotcw"  class="btn-ctrl">↻</button>
+        </div>
+        <div id="btn-dpad">
+          <div class="dpad-row"><button id="btn-up"    class="btn-ctrl">▲</button></div>
+          <div class="dpad-row">
+            <button id="btn-left"  class="btn-ctrl">◀</button>
+            <button id="btn-down"  class="btn-ctrl">▼</button>
+            <button id="btn-right" class="btn-ctrl">▶</button>
+          </div>
+        </div>
+        <button id="btn-place" class="btn-ctrl btn-place-big">PLACE</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Controls hint (landscape) -->
+  <div id="controls-hint">
+    Arrows: move &nbsp;|&nbsp; Z/X: rotate &nbsp;|&nbsp; Space: place &nbsp;|&nbsp; P: pause
+  </div>
+
+  <script type="module" src="js/game.js"></script>
+</body>
+</html>
