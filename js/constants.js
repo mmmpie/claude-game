@@ -1,7 +1,7 @@
-// Grid dimensions
-export const COLS = 20;
-export const ROWS = 22;
-export const BASE_CELL_SIZE = 28; // px, may be overridden by portrait scaling
+// Grid dimensions — 10x10
+export const COLS = 10;
+export const ROWS = 10;
+export const BASE_CELL_SIZE = 50; // px, larger cells for smaller grid
 
 // Canvas layout (landscape)
 export const HUD_WIDTH = 200;
@@ -28,7 +28,6 @@ export const CLUSTER_MIN_SIZE = 6;
 
 // Tetromino shapes — each piece has 4 rotations.
 // Each rotation is an array of [dRow, dCol] offsets relative to piece.row/piece.col.
-// Bounding box is 4x4 for all pieces.
 export const TETROMINOES = {
   I: [
     [[1,0],[1,1],[1,2],[1,3]],
@@ -98,19 +97,7 @@ export const SCORE = {
   clusterCell:   5,
   clusterBonus:  50,  // per extra cluster beyond first
   monsterKill:   { goblin: 10, orc: 25, dragon: 100 },
-  goldValue:     1,   // multiplier on gold amount
   levelComplete: 500,
-};
-
-// Content pool probability per locked cell
-export const CONTENT_PROB = 0.15;
-
-// Level generation
-export const LEVEL_CONFIG = {
-  monstersBase:     2,
-  monstersPerLevel: 2,
-  treasuresBase:    4,
-  treasuresPerLevel:1,
 };
 
 // Monster type weights by level
