@@ -1,6 +1,6 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=6';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=6';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=6';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=7';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=7';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=7';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -193,27 +193,33 @@ export function collectTreasure(adv, treasure, grid, gameState) {
 }
 
 // ---------------------------------------------------------------------------
-// Monster AI turn
+// Monster AI — single monster (called per-frame for step-based animation)
+// ---------------------------------------------------------------------------
+export function runSingleMonsterTurn(monster, grid, gameState) {
+  const adv = gameState.adventurer;
+  if (!monster.alive) return;
+  if (monster.justSpawned) { monster.justSpawned = false; return; }
+  if (isAdjacentCoords(monster.row, monster.col, adv.row, adv.col)) return;
+
+  const path = bfs(grid, monster, adv, { forEntity: 'monster', adjacentGoal: true });
+  if (!path || path.length === 0) return;
+
+  const step = path[0];
+  const cell = getCell(grid, step.row, step.col);
+  if (!cell || cell.locked || cell.entity) return;
+
+  removeEntity(grid, monster.row, monster.col);
+  monster.row = step.row;
+  monster.col = step.col;
+  placeEntity(grid, monster.row, monster.col, 'monster', monster);
+}
+
+// ---------------------------------------------------------------------------
+// Monster AI turn (all monsters — kept for completeness)
 // ---------------------------------------------------------------------------
 export function runMonstersTurn(grid, gameState) {
-  const adv = gameState.adventurer;
   for (const monster of grid.monsters) {
-    if (!monster.alive) continue;
-    if (monster.justSpawned) { monster.justSpawned = false; continue; } // wait one turn before moving
-    if (isAdjacentCoords(monster.row, monster.col, adv.row, adv.col)) continue; // will fight in combat step
-
-    const path = bfs(grid, monster, adv, { forEntity: 'monster', adjacentGoal: true });
-    if (!path || path.length === 0) continue;
-
-    const step = path[0];
-    // Ensure step is not a wall or any occupied cell
-    const cell = getCell(grid, step.row, step.col);
-    if (!cell || cell.locked || cell.entity) continue;
-
-    removeEntity(grid, monster.row, monster.col);
-    monster.row = step.row;
-    monster.col = step.col;
-    placeEntity(grid, monster.row, monster.col, 'monster', monster);
+    runSingleMonsterTurn(monster, grid, gameState);
   }
 }
 

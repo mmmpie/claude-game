@@ -1,15 +1,16 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=6';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=6';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=6';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runMonstersTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=6';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=6';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=7';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=7';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=7';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=7';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=7';
 
 // ---------------------------------------------------------------------------
 // Game state
 // ---------------------------------------------------------------------------
-let gameState = null;
-let renderer  = null;
-let portrait  = false;
+let gameState    = null;
+let renderer     = null;
+let portrait     = false;
+let pendingSteps = [];   // step queue for frame-by-frame turn animation
 
 function newGameState() {
   return {
@@ -104,8 +105,9 @@ function handleAction(action) {
     if (phase === 'PAUSED')  { gameState.phase = 'PLACING'; return; }
     return;
   }
-  if (action === 'restart' && phase === 'GAME_OVER') { startGame(); return; }
+  if (action === 'restart' && phase === 'GAME_OVER') { pendingSteps = []; startGame(); return; }
   if ((action === 'next-level' || action === 'place') && phase === 'LEVEL_COMPLETE') {
+    pendingSteps = [];
     initLevel(gameState, gameState.level + 1);
     return;
   }
@@ -131,19 +133,26 @@ function handleAction(action) {
 }
 
 // ---------------------------------------------------------------------------
-// Place the active piece — core turn sequence
+// Place the active piece.
+// Locks the piece + clears clusters synchronously (so the next render shows
+// the final playfield), then queues the remaining turn steps so each one
+// gets its own animation frame.
 // ---------------------------------------------------------------------------
 function placePiece() {
   const { activePiece, grid } = gameState;
   if (!isValidPlacement(activePiece, grid)) return;
 
+  // Remember spawn position before we clear the active piece
+  const spawnRow = activePiece.row;
+  const spawnCol = activePiece.col;
+
   lockPiece(activePiece, grid);
+  gameState.activePiece = null;   // hide ghost piece while animating
 
   // Cluster detection + clearing
   const clusters = findClusters(grid);
-  let allClearedCells = [];
   if (clusters.length > 0) {
-    for (const cluster of clusters) allClearedCells = allClearedCells.concat(cluster);
+    const allClearedCells = clusters.flat();
     const events = clearClusters(grid, clusters);
     flashCells(renderer, allClearedCells);
 
@@ -155,32 +164,50 @@ function placePiece() {
         ? `${clusters.length}x combo! +${baseScore + bonus} pts`
         : `Cluster! +${baseScore} pts`
     );
-
     spawnRevealedEntities(grid, events);
   }
 
   gameState.turnCount++;
 
-  const { trapped } = runAdventurerTurn(gameState.adventurer, grid, gameState);
-  if (trapped) logEvent(gameState, 'Adventurer is trapped!');
+  // Snapshot living monsters now so the queue captures the current roster
+  const monstersThisTurn = grid.monsters.filter(m => m.alive);
 
-  if (checkWin()) return;
+  // Queue: adventurer move → each monster move → combat + advance piece.
+  // Each step runs on its own animation frame so the board is rendered
+  // between every action.
+  gameState.phase = 'ANIMATING';
+  pendingSteps = [
+    // Step 1 — move adventurer
+    () => {
+      const { trapped } = runAdventurerTurn(gameState.adventurer, grid, gameState);
+      if (trapped) logEvent(gameState, 'Adventurer is trapped!');
+      checkWin();
+    },
+    // Steps 2…N — move each monster individually
+    ...monstersThisTurn.map(monster => () => {
+      if (gameState.phase !== 'ANIMATING') return;
+      runSingleMonsterTurn(monster, grid, gameState);
+    }),
+    // Final step — resolve combat then hand control back to the player
+    () => {
+      if (gameState.phase !== 'ANIMATING') return;
+      resolveCombat(grid, gameState);
+      if (gameState.phase === 'GAME_OVER') return;
+      if (checkWin()) return;
 
-  runMonstersTurn(grid, gameState);
-  resolveCombat(grid, gameState);
+      gameState.activePiece = clampPiece(
+        { ...gameState.nextPiece, row: spawnRow, col: spawnCol }
+      );
+      gameState.nextPiece = makePiece(gameState);
 
-  if (gameState.phase === 'GAME_OVER') return;
-  if (checkWin()) return;
-
-  // Next piece spawns at the location of the piece just placed
-  const lastPos = { row: activePiece.row, col: activePiece.col };
-  gameState.activePiece = clampPiece({ ...gameState.nextPiece, row: lastPos.row, col: lastPos.col });
-  gameState.nextPiece   = makePiece(gameState);
-
-  if (!anyValidPlacement(grid, gameState.activePiece)) {
-    gameState.phase = 'GAME_OVER';
-    logEvent(gameState, 'No space left! Game over.');
-  }
+      if (!anyValidPlacement(grid, gameState.activePiece)) {
+        gameState.phase = 'GAME_OVER';
+        logEvent(gameState, 'No space left! Game over.');
+      } else {
+        gameState.phase = 'PLACING';
+      }
+    },
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -306,10 +333,16 @@ function applyLayout() {
 }
 
 // ---------------------------------------------------------------------------
-// Game loop
+// Game loop — executes one pending turn step per frame when animating
 // ---------------------------------------------------------------------------
 function loop() {
   if (gameState) {
+    if (gameState.phase === 'ANIMATING' && pendingSteps.length > 0) {
+      const step = pendingSteps.shift();
+      step();
+      // If a step changed the phase (win / game-over), discard remaining steps
+      if (gameState.phase !== 'ANIMATING') pendingSteps = [];
+    }
     render(renderer, gameState);
     if (portrait) updatePortraitHUD(gameState);
   }
@@ -320,6 +353,7 @@ function loop() {
 // Start / restart
 // ---------------------------------------------------------------------------
 function startGame() {
+  pendingSteps = [];
   gameState = newGameState();
   initLevel(gameState, 1);
 }
