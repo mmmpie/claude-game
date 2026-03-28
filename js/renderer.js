@@ -1,4 +1,4 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, FLASH_DURATION } from './constants.js';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js';
 import { getPieceCells, isValidPlacement } from './tetromino.js';
 
 // ---------------------------------------------------------------------------
@@ -14,6 +14,13 @@ export function createRenderer(canvas) {
     hudX: 0,
     flashCells: new Map(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Font Awesome helper — solid weight, given size in px
+// ---------------------------------------------------------------------------
+function faFont(size) {
+  return `${FA_WEIGHT} ${size}px ${FA_FONT}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +181,7 @@ function drawContentGlyph(ctx, cx, cy, cellSize, content, alpha) {
   const fontSize = Math.max(10, cellSize - 16);
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.font = `bold ${fontSize}px monospace`;
+  ctx.font = faFont(fontSize);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -188,7 +195,7 @@ function drawContentGlyph(ctx, cx, cy, cellSize, content, alpha) {
     ctx.fillText(ttype.glyph, cx, cy);
   } else if (content.type === 'stairs') {
     ctx.fillStyle = '#F1C40F';
-    ctx.fillText('>', cx, cy);
+    ctx.fillText(FA_ICONS.stairs, cx, cy);
   }
 
   ctx.restore();
@@ -220,28 +227,28 @@ function drawEntities(ctx, renderer, grid, adventurer) {
 }
 
 function drawAdventurer(ctx, x, y, cellSize) {
-  const r = cellSize * 0.38;
+  const r = cellSize * 0.4;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fillStyle = '#2c3e50';
   ctx.fill();
-  ctx.strokeStyle = '#ecf0f1';
+  ctx.strokeStyle = '#3498DB';
   ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `bold ${Math.max(10, cellSize - 10)}px monospace`;
+  ctx.fillStyle = '#ECF0F1';
+  ctx.font = faFont(Math.max(10, cellSize - 14));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('@', x, y);
+  ctx.fillText(FA_ICONS.adventurer, x, y);
 }
 
 function drawMonster(ctx, x, y, cellSize, fontSize, monster) {
   const stats = MONSTER_STATS[monster.type];
   ctx.fillStyle = stats.color;
-  ctx.font = `bold ${fontSize}px monospace`;
+  ctx.font = faFont(fontSize);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(stats.glyph, x, y - 2);
+  ctx.fillText(stats.glyph, x, y - 3);
 
   const barW = cellSize - 6;
   const barH = 4;
@@ -256,7 +263,7 @@ function drawMonster(ctx, x, y, cellSize, fontSize, monster) {
 function drawTreasure(ctx, x, y, fontSize, treasure) {
   const ttype = TREASURE_TYPES[treasure.type];
   ctx.fillStyle = ttype.color;
-  ctx.font = `bold ${fontSize}px monospace`;
+  ctx.font = faFont(fontSize);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(ttype.glyph, x, y);
@@ -264,10 +271,10 @@ function drawTreasure(ctx, x, y, fontSize, treasure) {
 
 function drawStairs(ctx, x, y, fontSize) {
   ctx.fillStyle = '#F1C40F';
-  ctx.font = `bold ${fontSize}px monospace`;
+  ctx.font = faFont(fontSize);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('>', x, y);
+  ctx.fillText(FA_ICONS.stairs, x, y);
 }
 
 // ---------------------------------------------------------------------------
@@ -360,7 +367,7 @@ function drawNextPiecePreview(ctx, piece, x, y) {
     const content = piece.cellContents[i];
     if (content) {
       ctx.save();
-      ctx.font = `bold 8px monospace`;
+      ctx.font = faFont(8);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.globalAlpha = 0.9;
@@ -370,9 +377,6 @@ function drawNextPiecePreview(ctx, piece, x, y) {
       } else if (content.type === 'treasure') {
         ctx.fillStyle = TREASURE_TYPES[content.treasureType].color;
         ctx.fillText(TREASURE_TYPES[content.treasureType].glyph, px + previewSize / 2, py + previewSize / 2);
-      } else if (content.type === 'stairs') {
-        ctx.fillStyle = '#F1C40F';
-        ctx.fillText('>', px + previewSize / 2, py + previewSize / 2);
       }
       ctx.restore();
     }

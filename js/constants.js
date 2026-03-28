@@ -74,11 +74,27 @@ export const TETROMINOES = {
 };
 export const TETROMINO_TYPES = ['I','O','T','S','Z','J','L'];
 
+// Font Awesome 6 Free Solid — font family and per-entity icon codepoints
+export const FA_FONT   = '"Font Awesome 6 Free"';
+export const FA_WEIGHT = '900';
+
+export const FA_ICONS = {
+  adventurer: '\uf554',  // fa-person-hiking
+  stairs:     '\ue289',  // fa-stairs
+  goblin:     '\uf6e2',  // fa-ghost
+  orc:        '\uf54c',  // fa-skull
+  dragon:     '\uf6d5',  // fa-dragon
+  gold:       '\uf51e',  // fa-coins
+  sword:      '\uf6e3',  // fa-hammer  (no free sword icon in FA6)
+  armor:      '\uf132',  // fa-shield
+  potion:     '\uf0c3',  // fa-flask
+};
+
 // Monster base stats
 export const MONSTER_STATS = {
-  goblin: { hp: 6,  attack: 2, defense: 0, xpValue: 10,  glyph: 'g', color: '#27AE60' },
-  orc:    { hp: 14, attack: 4, defense: 1, xpValue: 25,  glyph: 'O', color: '#E67E22' },
-  dragon: { hp: 32, attack: 8, defense: 3, xpValue: 100, glyph: 'D', color: '#C0392B' },
+  goblin: { hp: 6,  attack: 2, defense: 0, xpValue: 10,  glyph: FA_ICONS.goblin, color: '#2ECC71' },
+  orc:    { hp: 14, attack: 4, defense: 1, xpValue: 25,  glyph: FA_ICONS.orc,    color: '#E67E22' },
+  dragon: { hp: 32, attack: 8, defense: 3, xpValue: 100, glyph: FA_ICONS.dragon,  color: '#E74C3C' },
 };
 
 // Adventurer base stats
@@ -86,10 +102,10 @@ export const ADVENTURER_BASE = { hp: 30, maxHp: 30, attack: 6, defense: 1 };
 
 // Treasure types
 export const TREASURE_TYPES = {
-  gold:   { glyph: '$', color: '#F1C40F', description: 'Gold' },
-  sword:  { glyph: 's', color: '#BDC3C7', description: 'Sword (+3 ATK)', attackBonus: 3 },
-  armor:  { glyph: 'a', color: '#95A5A6', description: 'Armor (+2 DEF)', defenseBonus: 2 },
-  potion: { glyph: 'p', color: '#E91E63', description: 'Potion (+10 HP)', hpRestore: 10 },
+  gold:   { glyph: FA_ICONS.gold,   color: '#F1C40F', description: 'Gold' },
+  sword:  { glyph: FA_ICONS.sword,  color: '#ECF0F1', description: 'Sword (+3 ATK)', attackBonus: 3 },
+  armor:  { glyph: FA_ICONS.armor,  color: '#95A5A6', description: 'Armor (+2 DEF)', defenseBonus: 2 },
+  potion: { glyph: FA_ICONS.potion, color: '#E91E63', description: 'Potion (+10 HP)', hpRestore: 10 },
 };
 
 // Scoring

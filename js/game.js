@@ -364,8 +364,11 @@ export function initGame() {
   document.addEventListener('keydown', onKeyDown);
   wireButtons();
 
-  startGame();
-  loop();
+  // Wait for Font Awesome to load before rendering any glyphs
+  const fontSpec = '900 1em "Font Awesome 6 Free"';
+  document.fonts.load(fontSpec)
+    .catch(() => {}) // fallback: start anyway if load fails
+    .finally(() => { startGame(); loop(); });
 }
 
 if (document.readyState === 'loading') {
