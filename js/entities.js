@@ -1,6 +1,6 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=2';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=2';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=2';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=3';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=3';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=3';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -72,6 +72,10 @@ export function runAdventurerTurn(adv, grid, gameState) {
 
     // Check what's at the destination before moving
     const destCell = getCell(grid, step.row, step.col);
+
+    // Never step into a monster's cell — stay adjacent and let combat resolve
+    if (destCell && destCell.entity === 'monster') break;
+
     const destTreasure = (destCell && destCell.entity === 'treasure') ? destCell.entityRef : null;
     const isStairs     = destCell && destCell.entity === 'stairs';
 
@@ -195,9 +199,9 @@ export function runMonstersTurn(grid, gameState) {
     if (!path || path.length === 0) continue;
 
     const step = path[0];
-    // Ensure step is not a wall or occupied by another monster
+    // Ensure step is not a wall, another monster, or the adventurer
     const cell = getCell(grid, step.row, step.col);
-    if (!cell || cell.locked || cell.entity === 'monster') continue;
+    if (!cell || cell.locked || cell.entity === 'monster' || cell.entity === 'adventurer') continue;
 
     removeEntity(grid, monster.row, monster.col);
     monster.row = step.row;
