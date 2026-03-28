@@ -1,6 +1,6 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=1';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=1';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=1';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=2';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=2';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=2';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -93,11 +93,11 @@ export function runAdventurerTurn(adv, grid, gameState) {
 }
 
 function computeNextStep(adv, grid, gameState) {
-  // Priority 1: adjacent treasure
+  // Priority 1: adjacent treasure (only if not blocked by a wall)
   for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
     const nr = adv.row + dr, nc = adv.col + dc;
     const cell = getCell(grid, nr, nc);
-    if (cell && cell.entity === 'treasure') return { row: nr, col: nc };
+    if (cell && !cell.locked && cell.entity === 'treasure') return { row: nr, col: nc };
   }
 
   // Gather all visible treasures and stairs as targets
@@ -195,9 +195,9 @@ export function runMonstersTurn(grid, gameState) {
     if (!path || path.length === 0) continue;
 
     const step = path[0];
-    // Ensure step is not occupied by another monster
+    // Ensure step is not a wall or occupied by another monster
     const cell = getCell(grid, step.row, step.col);
-    if (cell && cell.entity === 'monster') continue;
+    if (!cell || cell.locked || cell.entity === 'monster') continue;
 
     removeEntity(grid, monster.row, monster.col);
     monster.row = step.row;

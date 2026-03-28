@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=1';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=1';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=1';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runMonstersTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=1';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=1';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=2';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=2';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=2';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runMonstersTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=2';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=2';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -36,8 +36,8 @@ function initLevel(state, levelNum) {
   const grid = createGrid();
   state.grid = grid;
 
-  // Spawn adventurer at bottom-center
-  const advRow = ROWS - 2;
+  // Spawn adventurer at center of playfield
+  const advRow = Math.floor(ROWS / 2);
   const advCol = Math.floor(COLS / 2);
   const adv = levelNum === 1
     ? createAdventurer(advRow, advCol)
@@ -54,37 +54,26 @@ function initLevel(state, levelNum) {
   grid.treasures = [];
   grid.stairs = null;
 
-  // Place stairs visibly on the playfield at level start.
-  // Pick a random cell in the top half of the grid, away from the adventurer.
-  const stairsPos = pickStairsPosition(grid, adv);
+  // Place stairs in a random corner
+  const stairsPos = pickStairsCorner();
   grid.stairs = stairsPos;
   placeEntity(grid, stairsPos.row, stairsPos.col, 'stairs', stairsPos);
 
-  state.activePiece = makePiece(state);
+  // First piece spawns near the adventurer (piece origin = adv position offset by -1)
+  state.activePiece = clampPiece({ ...makePiece(state), row: advRow - 1, col: advCol - 1 });
   state.nextPiece   = makePiece(state);
 
   logEvent(state, `=== Level ${levelNum} ===`);
 }
 
-function pickStairsPosition(grid, adv) {
-  // Collect all empty cells in the top half, at least 3 rows from adventurer
-  const candidates = [];
-  for (let r = 0; r < Math.floor(ROWS / 2); r++) {
-    for (let c = 0; c < COLS; c++) {
-      const dist = Math.abs(r - adv.row) + Math.abs(c - adv.col);
-      const cell = getCell(grid, r, c);
-      if (cell && !cell.entity && dist >= 4) candidates.push({ row: r, col: c });
-    }
-  }
-  if (candidates.length === 0) {
-    // Fallback: any empty cell except adventurer's
-    for (let r = 0; r < ROWS; r++)
-      for (let c = 0; c < COLS; c++) {
-        const cell = getCell(grid, r, c);
-        if (cell && !cell.entity) return { row: r, col: c };
-      }
-  }
-  return candidates[Math.floor(Math.random() * candidates.length)];
+function pickStairsCorner() {
+  const corners = [
+    { row: 0,        col: 0        },
+    { row: 0,        col: COLS - 1 },
+    { row: ROWS - 1, col: 0        },
+    { row: ROWS - 1, col: COLS - 1 },
+  ];
+  return corners[Math.floor(Math.random() * corners.length)];
 }
 
 function removeEntitySafe(grid, entity) {
@@ -116,7 +105,7 @@ function handleAction(action) {
     return;
   }
   if (action === 'restart' && phase === 'GAME_OVER') { startGame(); return; }
-  if (action === 'next-level' && phase === 'LEVEL_COMPLETE') {
+  if ((action === 'next-level' || action === 'place') && phase === 'LEVEL_COMPLETE') {
     initLevel(gameState, gameState.level + 1);
     return;
   }
@@ -183,7 +172,9 @@ function placePiece() {
   if (gameState.phase === 'GAME_OVER') return;
   if (checkWin()) return;
 
-  gameState.activePiece = gameState.nextPiece;
+  // Next piece spawns at the location of the piece just placed
+  const lastPos = { row: activePiece.row, col: activePiece.col };
+  gameState.activePiece = clampPiece({ ...gameState.nextPiece, row: lastPos.row, col: lastPos.col });
   gameState.nextPiece   = makePiece(gameState);
 
   if (!anyValidPlacement(grid, gameState.activePiece)) {
