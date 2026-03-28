@@ -1,6 +1,6 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=5';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=5';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=5';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=6';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=6';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=6';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -151,7 +151,13 @@ function hasPassableNeighbor(adv, grid) {
 export function collectTreasure(adv, treasure, grid, gameState) {
   if (!treasure || treasure.collected) return;
   treasure.collected = true;
-  removeEntity(grid, treasure.row, treasure.col);
+  // Only clear the cell if it still holds the treasure reference.
+  // If the adventurer already moved onto this cell, placeEntity has already
+  // overwritten the treasure — removing it now would erase the adventurer.
+  const cell = getCell(grid, treasure.row, treasure.col);
+  if (cell && cell.entityRef === treasure) {
+    removeEntity(grid, treasure.row, treasure.col);
+  }
 
   switch (treasure.type) {
     case 'gold':
