@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=3';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=3';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=3';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runMonstersTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=3';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=3';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=4';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=4';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=4';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runMonstersTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=4';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=4';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -196,53 +196,34 @@ function spawnRevealedEntities(grid, events) {
         const dist = Math.abs(row - adv.row) + Math.abs(col - adv.col);
         if (dist <= 2) { logEvent(gameState, 'A dragon lurks...'); continue; }
       }
-      const pos = findEmptyNear(grid, row, col);
-      if (!pos) continue;
-      const monster = createMonster(descriptor.monsterType, pos.row, pos.col);
+      // Spawn at the exact cleared cell; cleared cells are guaranteed empty here
+      const cell = getCell(grid, row, col);
+      if (!cell || cell.entity) continue;
+      const monster = createMonster(descriptor.monsterType, row, col);
+      monster.justSpawned = true;   // skip movement this turn
       grid.monsters.push(monster);
-      placeEntity(grid, pos.row, pos.col, 'monster', monster);
+      placeEntity(grid, row, col, 'monster', monster);
       logEvent(gameState, `A ${descriptor.monsterType} appears!`);
       continue;
     }
 
     if (type === 'treasure') {
-      const pos = findEmptyNear(grid, row, col);
-      if (!pos) continue;
+      // Spawn at the exact cleared cell
+      const cell = getCell(grid, row, col);
+      if (!cell || cell.entity) continue;
       // Scale gold value by cluster size; equipment unchanged
       const scaledValue = descriptor.treasureType === 'gold'
         ? Math.round(descriptor.value * (clusterSize / CLUSTER_MIN_SIZE))
         : descriptor.value;
-      const treasure = createTreasure(descriptor.treasureType, scaledValue, pos.row, pos.col);
+      const treasure = createTreasure(descriptor.treasureType, scaledValue, row, col);
       grid.treasures.push(treasure);
-      placeEntity(grid, pos.row, pos.col, 'treasure', treasure);
+      placeEntity(grid, row, col, 'treasure', treasure);
       continue;
     }
   }
 }
 
-// ---------------------------------------------------------------------------
-// BFS outward search for nearest empty unlocked cell
-// ---------------------------------------------------------------------------
-function findEmptyNear(grid, row, col) {
-  const visited = new Set();
-  const queue = [{ row, col }];
-  visited.add(`${row},${col}`);
-  while (queue.length > 0) {
-    const cur = queue.shift();
-    const cell = getCell(grid, cur.row, cur.col);
-    if (cell && !cell.locked && !cell.entity) return cur;
-    for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]) {
-      const nr = cur.row + dr, nc = cur.col + dc;
-      const key = `${nr},${nc}`;
-      if (visited.has(key)) continue;
-      if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
-      visited.add(key);
-      queue.push({ row: nr, col: nc });
-    }
-    if (visited.size > 80) break;
-  }
-  return null;
-}
+// (findEmptyNear removed — entities now spawn at their exact cleared cell)
 
 // ---------------------------------------------------------------------------
 // Win condition check

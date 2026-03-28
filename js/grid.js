@@ -1,4 +1,4 @@
-import { COLS, ROWS, CLUSTER_MIN_SIZE, monsterWeights } from './constants.js?v=3';
+import { COLS, ROWS, CLUSTER_MIN_SIZE, monsterWeights } from './constants.js?v=4';
 
 // ---------------------------------------------------------------------------
 // Cell factory

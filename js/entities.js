@@ -1,6 +1,6 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=3';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=3';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=3';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=4';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=4';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=4';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -193,6 +193,7 @@ export function runMonstersTurn(grid, gameState) {
   const adv = gameState.adventurer;
   for (const monster of grid.monsters) {
     if (!monster.alive) continue;
+    if (monster.justSpawned) { monster.justSpawned = false; continue; } // wait one turn before moving
     if (isAdjacentCoords(monster.row, monster.col, adv.row, adv.col)) continue; // will fight in combat step
 
     const path = bfs(grid, monster, adv, { forEntity: 'monster', adjacentGoal: true });
