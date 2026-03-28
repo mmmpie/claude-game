@@ -1,4 +1,4 @@
-import { COLS, ROWS, SCORE, STAIRS_FORCE_TURN, CLUSTER_MIN_SIZE } from './constants.js';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js';
 import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js';
 import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js';
 import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runMonstersTurn, resolveCombat, collectTreasure, logEvent } from './entities.js';
@@ -22,7 +22,6 @@ function newGameState() {
     adventurer: null,
     eventLog: [],
     turnCount: 0,
-    stairsPending: true,  // true until stairs appears on the grid
   };
 }
 
@@ -32,7 +31,6 @@ function newGameState() {
 function initLevel(state, levelNum) {
   state.level = levelNum;
   state.phase = 'PLACING';
-  state.stairsPending = true;
   state.turnCount = 0;
 
   const grid = createGrid();
@@ -56,10 +54,37 @@ function initLevel(state, levelNum) {
   grid.treasures = [];
   grid.stairs = null;
 
+  // Place stairs visibly on the playfield at level start.
+  // Pick a random cell in the top half of the grid, away from the adventurer.
+  const stairsPos = pickStairsPosition(grid, adv);
+  grid.stairs = stairsPos;
+  placeEntity(grid, stairsPos.row, stairsPos.col, 'stairs', stairsPos);
+
   state.activePiece = makePiece(state);
   state.nextPiece   = makePiece(state);
 
   logEvent(state, `=== Level ${levelNum} ===`);
+}
+
+function pickStairsPosition(grid, adv) {
+  // Collect all empty cells in the top half, at least 3 rows from adventurer
+  const candidates = [];
+  for (let r = 0; r < Math.floor(ROWS / 2); r++) {
+    for (let c = 0; c < COLS; c++) {
+      const dist = Math.abs(r - adv.row) + Math.abs(c - adv.col);
+      const cell = getCell(grid, r, c);
+      if (cell && !cell.entity && dist >= 4) candidates.push({ row: r, col: c });
+    }
+  }
+  if (candidates.length === 0) {
+    // Fallback: any empty cell except adventurer's
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++) {
+        const cell = getCell(grid, r, c);
+        if (cell && !cell.entity) return { row: r, col: c };
+      }
+  }
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 function removeEntitySafe(grid, entity) {
@@ -69,23 +94,12 @@ function removeEntitySafe(grid, entity) {
 }
 
 // ---------------------------------------------------------------------------
-// Build a new piece with content assigned to each cell at instantiation.
-// Stairs is forced into a cell once STAIRS_FORCE_TURN is reached.
+// Build a new piece with monster/treasure content assigned at instantiation.
 // ---------------------------------------------------------------------------
 function makePiece(gameState) {
-  const { level, stairsPending, turnCount } = gameState;
-  const forceStairs = stairsPending && turnCount >= STAIRS_FORCE_TURN;
-
-  const cellContents = [null, null, null, null];
-  let stairsAssigned = false;
-
-  for (let i = 0; i < 4; i++) {
-    const force = forceStairs && !stairsAssigned && i === 0;
-    const content = generateCellContent(level, stairsPending && !stairsAssigned, force);
-    cellContents[i] = content;
-    if (content && content.type === 'stairs') stairsAssigned = true;
-  }
-
+  const cellContents = Array.from({ length: 4 }, () =>
+    generateCellContent(gameState.level)
+  );
   return createPiece(randomType(), randomColor(), cellContents);
 }
 
@@ -184,16 +198,6 @@ function placePiece() {
 // ---------------------------------------------------------------------------
 function spawnRevealedEntities(grid, events) {
   for (const { type, row, col, descriptor, clusterSize } of events) {
-
-    if (type === 'stairs') {
-      const pos = findEmptyNear(grid, row, col);
-      if (!pos) continue;
-      grid.stairs = pos;
-      placeEntity(grid, pos.row, pos.col, 'stairs', pos);
-      gameState.stairsPending = false;
-      logEvent(gameState, 'Stairs to next level revealed!');
-      continue;
-    }
 
     if (type === 'monster') {
       const adv = gameState.adventurer;

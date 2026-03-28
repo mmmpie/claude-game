@@ -48,19 +48,11 @@ export function setCell(grid, row, col, fields) {
 }
 
 // ---------------------------------------------------------------------------
-// Generate content for a single piece cell
-// Called at piece instantiation, not at cluster removal.
-// stairsPending: whether stairs hasn't appeared yet
-// forceStairs:   override — always produce stairs this call
+// Generate content for a single piece cell at instantiation time.
+// Stairs is never produced here — it is placed directly on the playfield
+// at the start of each level.
 // ---------------------------------------------------------------------------
-export function generateCellContent(level, stairsPending, forceStairs) {
-  if (forceStairs) return { type: 'stairs' };
-
-  const rand = Math.random();
-
-  // Low chance of stairs while it's still pending
-  if (stairsPending && rand < 0.06) return { type: 'stairs' };
-
+export function generateCellContent(level) {
   const r2 = Math.random();
   if (r2 < 0.18) {
     // Monster

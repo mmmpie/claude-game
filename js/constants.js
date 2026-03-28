@@ -26,9 +26,6 @@ export const COLORS_DARK = {
 // Cluster clear threshold
 export const CLUSTER_MIN_SIZE = 6;
 
-// Force stairs to appear by this turn number
-export const STAIRS_FORCE_TURN = 8;
-
 // Tetromino shapes — each piece has 4 rotations.
 // Each rotation is an array of [dRow, dCol] offsets relative to piece.row/piece.col.
 export const TETROMINOES = {
