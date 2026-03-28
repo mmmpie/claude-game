@@ -126,7 +126,7 @@ export function monsterWeights(level) {
 }
 
 // Adventurer moves per turn
-export const ADVENTURER_MOVES = 2;
+export const ADVENTURER_MOVES = 1;
 
 // Event log max entries
 export const LOG_MAX = 8;
