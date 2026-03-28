@@ -1,6 +1,6 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=4';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=4';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=4';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=5';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=5';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=5';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -200,9 +200,9 @@ export function runMonstersTurn(grid, gameState) {
     if (!path || path.length === 0) continue;
 
     const step = path[0];
-    // Ensure step is not a wall, another monster, or the adventurer
+    // Ensure step is not a wall or any occupied cell
     const cell = getCell(grid, step.row, step.col);
-    if (!cell || cell.locked || cell.entity === 'monster' || cell.entity === 'adventurer') continue;
+    if (!cell || cell.locked || cell.entity) continue;
 
     removeEntity(grid, monster.row, monster.col);
     monster.row = step.row;

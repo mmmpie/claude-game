@@ -1,4 +1,4 @@
-import { COLS, ROWS, CLUSTER_MIN_SIZE, monsterWeights } from './constants.js?v=4';
+import { COLS, ROWS, CLUSTER_MIN_SIZE, monsterWeights } from './constants.js?v=5';
 
 // ---------------------------------------------------------------------------
 // Cell factory
@@ -138,7 +138,8 @@ export function isPassable(grid, row, col, forEntity) {
   const cell = grid.cells[row][col];
   if (cell.locked) return false;
   if (cell.entity === 'monster') return false;
-  if (forEntity === 'monster' && cell.entity === 'adventurer') return false;
+  // Monsters cannot enter cells occupied by the adventurer, treasure, or stairs
+  if (forEntity === 'monster' && cell.entity) return false;
   return true;
 }
 
