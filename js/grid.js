@@ -1,4 +1,4 @@
-import { COLS, ROWS, CLUSTER_MIN_SIZE, CONTENT_PROB, LEVEL_CONFIG, monsterWeights, TETROMINO_TYPES, COLOR_NAMES, ADVENTURER_BASE } from './constants.js';
+import { COLS, ROWS, CLUSTER_MIN_SIZE, monsterWeights } from './constants.js';
 
 // ---------------------------------------------------------------------------
 // Cell factory
@@ -7,9 +7,8 @@ function makeCell() {
   return {
     color: null,       // 'red'|'blue'|'green'|'yellow'|null
     locked: false,     // true when occupied by a placed tetromino cell
-    content: null,     // ContentDescriptor — hidden until cluster cleared
-    revealed: false,   // true after cluster clear reveals content
-    entity: null,      // 'adventurer'|'monster'|'treasure'|'stairs'|null
+    content: null,     // ContentDescriptor — set at piece placement, visible immediately
+    entity: null,      // 'adventurer'|'monster'|'treasure'|'stairs'|null (active entities)
     entityRef: null,   // pointer to live entity object
   };
 }
@@ -29,11 +28,9 @@ export function createGrid() {
     cols: COLS,
     rows: ROWS,
     cells,
-    contentPool: [],
-    contentPoolIndex: 0,
     monsters: [],
     treasures: [],
-    stairs: null,  // {row, col} when revealed
+    stairs: null,  // {row, col} once freed by cluster clear
   };
 }
 
@@ -51,6 +48,35 @@ export function setCell(grid, row, col, fields) {
 }
 
 // ---------------------------------------------------------------------------
+// Generate content for a single piece cell
+// Called at piece instantiation, not at cluster removal.
+// stairsPending: whether stairs hasn't appeared yet
+// forceStairs:   override — always produce stairs this call
+// ---------------------------------------------------------------------------
+export function generateCellContent(level, stairsPending, forceStairs) {
+  if (forceStairs) return { type: 'stairs' };
+
+  const rand = Math.random();
+
+  // Low chance of stairs while it's still pending
+  if (stairsPending && rand < 0.06) return { type: 'stairs' };
+
+  const r2 = Math.random();
+  if (r2 < 0.18) {
+    // Monster
+    return { type: 'monster', monsterType: weightedPick(monsterWeights(level)) };
+  }
+  if (r2 < 0.38) {
+    // Treasure
+    const ttypes = ['gold', 'gold', 'gold', 'potion', 'sword', 'armor'];
+    const ttype = ttypes[Math.floor(Math.random() * ttypes.length)];
+    const value = ttype === 'gold' ? 5 + Math.floor(Math.random() * 16) : 0;
+    return { type: 'treasure', treasureType: ttype, value };
+  }
+  return null; // empty cell
+}
+
+// ---------------------------------------------------------------------------
 // Cluster detection — BFS flood fill
 // ---------------------------------------------------------------------------
 export function findClusters(grid) {
@@ -63,7 +89,6 @@ export function findClusters(grid) {
       const cell = grid.cells[r][c];
       if (!cell.locked || cell.color === null || visited.has(key)) continue;
 
-      // BFS from this seed
       const cluster = [];
       const queue = [{ row: r, col: c }];
       visited.add(key);
@@ -92,33 +117,30 @@ export function findClusters(grid) {
 }
 
 // ---------------------------------------------------------------------------
-// Clear clusters — returns SpawnEvents for revealed contents
+// Clear clusters — returns SpawnEvents for cell contents
+// Each SpawnEvent includes clusterSize so treasure value can be scaled.
 // ---------------------------------------------------------------------------
 export function clearClusters(grid, clusters) {
   const events = [];
   for (const cluster of clusters) {
+    const clusterSize = cluster.length;
     for (const { row, col } of cluster) {
       const cell = grid.cells[row][col];
-      const ev = revealCell(grid, row, col, cell);
-      if (ev) events.push(ev);
+      if (cell.content) {
+        events.push({ type: cell.content.type, row, col, descriptor: cell.content, clusterSize });
+      }
       // Clear the block
       cell.color = null;
       cell.locked = false;
+      cell.content = null;
     }
   }
   return events;
 }
 
-function revealCell(grid, row, col, cell) {
-  if (!cell.content || cell.content.type === 'nothing') return null;
-  cell.revealed = true;
-  return { type: cell.content.type, row, col, descriptor: cell.content };
-}
-
 // ---------------------------------------------------------------------------
 // Passability check
 // ---------------------------------------------------------------------------
-// forEntity: 'adventurer' | 'monster'
 export function isPassable(grid, row, col, forEntity) {
   if (row < 0 || row >= grid.rows || col < 0 || col >= grid.cols) return false;
   const cell = grid.cells[row][col];
@@ -129,7 +151,7 @@ export function isPassable(grid, row, col, forEntity) {
 }
 
 // ---------------------------------------------------------------------------
-// Place entity on grid
+// Entity placement helpers
 // ---------------------------------------------------------------------------
 export function placeEntity(grid, row, col, entityType, entityRef) {
   const cell = grid.cells[row][col];
@@ -144,57 +166,8 @@ export function removeEntity(grid, row, col) {
 }
 
 // ---------------------------------------------------------------------------
-// Level content pool seeding
-// ---------------------------------------------------------------------------
-export function seedContentPool(level) {
-  const pool = [];
-
-  const monsterCount = LEVEL_CONFIG.monstersBase + level * LEVEL_CONFIG.monstersPerLevel;
-  const treasureCount = LEVEL_CONFIG.treasuresBase + (level - 1) * LEVEL_CONFIG.treasuresPerLevel;
-  const weights = monsterWeights(level);
-
-  for (let i = 0; i < monsterCount; i++) {
-    pool.push({ type: 'monster', monsterType: weightedPick(weights) });
-  }
-
-  const treasureTypes = ['gold', 'gold', 'gold', 'potion', 'sword', 'armor'];
-  for (let i = 0; i < treasureCount; i++) {
-    const ttype = treasureTypes[Math.floor(Math.random() * treasureTypes.length)];
-    const value = ttype === 'gold' ? 5 + Math.floor(Math.random() * 16) : 0;
-    pool.push({ type: 'treasure', treasureType: ttype, value });
-  }
-
-  // One stairs, placed in the middle third
-  const stairsIdx = Math.floor(pool.length / 3) + Math.floor(Math.random() * Math.floor(pool.length / 3));
-  shuffle(pool);
-  // Ensure stairs isn't at extremes — swap into middle third
-  const stairsItem = { type: 'stairs' };
-  const insertAt = Math.floor(pool.length * 0.33) + Math.floor(Math.random() * Math.floor(pool.length * 0.34));
-  pool.splice(insertAt, 0, stairsItem);
-
-  return pool;
-}
-
-// ---------------------------------------------------------------------------
-// Draw from pool when locking a cell
-// ---------------------------------------------------------------------------
-export function drawContent(grid) {
-  if (grid.contentPoolIndex >= grid.contentPool.length) return null;
-  if (Math.random() > CONTENT_PROB) return null;
-  return grid.contentPool[grid.contentPoolIndex++];
-}
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
 function weightedPick(weights) {
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
   let r = Math.random() * total;

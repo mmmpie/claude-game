@@ -1,5 +1,5 @@
-import { COLS, ROWS, SCORE, COLOR_NAMES } from './constants.js';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, seedContentPool } from './grid.js';
+import { COLS, ROWS, SCORE, STAIRS_FORCE_TURN, CLUSTER_MIN_SIZE } from './constants.js';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js';
 import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js';
 import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runMonstersTurn, resolveCombat, collectTreasure, logEvent } from './entities.js';
 import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js';
@@ -10,11 +10,10 @@ import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD }
 let gameState = null;
 let renderer  = null;
 let portrait  = false;
-let animFrameId = null;
 
 function newGameState() {
   return {
-    phase: 'PLACING',  // 'PLACING' | 'GAME_OVER' | 'LEVEL_COMPLETE' | 'PAUSED'
+    phase: 'PLACING',
     level: 1,
     score: 0,
     grid: null,
@@ -23,6 +22,7 @@ function newGameState() {
     adventurer: null,
     eventLog: [],
     turnCount: 0,
+    stairsPending: true,  // true until stairs appears on the grid
   };
 }
 
@@ -32,20 +32,19 @@ function newGameState() {
 function initLevel(state, levelNum) {
   state.level = levelNum;
   state.phase = 'PLACING';
+  state.stairsPending = true;
+  state.turnCount = 0;
 
   const grid = createGrid();
-  grid.contentPool = seedContentPool(levelNum);
-  grid.contentPoolIndex = 0;
   state.grid = grid;
 
   // Spawn adventurer at bottom-center
   const advRow = ROWS - 2;
   const advCol = Math.floor(COLS / 2);
-  const adv = state.level === 1
+  const adv = levelNum === 1
     ? createAdventurer(advRow, advCol)
-    : state.adventurer;  // carry over between levels
+    : state.adventurer;
 
-  // Reset position for carried-over adventurer
   removeEntitySafe(grid, adv);
   adv.row = advRow;
   adv.col = advCol;
@@ -53,14 +52,12 @@ function initLevel(state, levelNum) {
   state.adventurer = adv;
   placeEntity(grid, advRow, advCol, 'adventurer', adv);
 
-  // Clear monsters/treasures/stairs from previous level
   grid.monsters = [];
   grid.treasures = [];
   grid.stairs = null;
 
-  // Spawn first and next piece
-  state.activePiece = makePiece();
-  state.nextPiece   = makePiece();
+  state.activePiece = makePiece(state);
+  state.nextPiece   = makePiece(state);
 
   logEvent(state, `=== Level ${levelNum} ===`);
 }
@@ -68,13 +65,28 @@ function initLevel(state, levelNum) {
 function removeEntitySafe(grid, entity) {
   if (!entity) return;
   const cell = getCell(grid, entity.row, entity.col);
-  if (cell && cell.entityRef === entity) {
-    removeEntity(grid, entity.row, entity.col);
-  }
+  if (cell && cell.entityRef === entity) removeEntity(grid, entity.row, entity.col);
 }
 
-function makePiece() {
-  return createPiece(randomType(), randomColor());
+// ---------------------------------------------------------------------------
+// Build a new piece with content assigned to each cell at instantiation.
+// Stairs is forced into a cell once STAIRS_FORCE_TURN is reached.
+// ---------------------------------------------------------------------------
+function makePiece(gameState) {
+  const { level, stairsPending, turnCount } = gameState;
+  const forceStairs = stairsPending && turnCount >= STAIRS_FORCE_TURN;
+
+  const cellContents = [null, null, null, null];
+  let stairsAssigned = false;
+
+  for (let i = 0; i < 4; i++) {
+    const force = forceStairs && !stairsAssigned && i === 0;
+    const content = generateCellContent(level, stairsPending && !stairsAssigned, force);
+    cellContents[i] = content;
+    if (content && content.type === 'stairs') stairsAssigned = true;
+  }
+
+  return createPiece(randomType(), randomColor(), cellContents);
 }
 
 // ---------------------------------------------------------------------------
@@ -89,12 +101,7 @@ function handleAction(action) {
     if (phase === 'PAUSED')  { gameState.phase = 'PLACING'; return; }
     return;
   }
-
-  if (action === 'restart' && phase === 'GAME_OVER') {
-    startGame();
-    return;
-  }
-
+  if (action === 'restart' && phase === 'GAME_OVER') { startGame(); return; }
   if (action === 'next-level' && phase === 'LEVEL_COMPLETE') {
     initLevel(gameState, gameState.level + 1);
     return;
@@ -107,102 +114,92 @@ function handleAction(action) {
 
   let newPiece = piece;
   switch (action) {
-    case 'left':   newPiece = movePiece(piece, 0, -1); break;
-    case 'right':  newPiece = movePiece(piece, 0,  1); break;
-    case 'up':     newPiece = movePiece(piece, -1, 0); break;
-    case 'down':   newPiece = movePiece(piece,  1, 0); break;
+    case 'left':      newPiece = movePiece(piece, 0, -1); break;
+    case 'right':     newPiece = movePiece(piece, 0,  1); break;
+    case 'up':        newPiece = movePiece(piece, -1, 0); break;
+    case 'down':      newPiece = movePiece(piece,  1, 0); break;
     case 'rotateCW':  newPiece = rotatePiece(piece,  1); break;
     case 'rotateCCW': newPiece = rotatePiece(piece, -1); break;
-    case 'place':  placePiece(); return;
+    case 'place':     placePiece(); return;
     default: return;
   }
 
-  // Clamp to grid bounds after move/rotate
-  newPiece = clampPiece(newPiece);
-  gameState.activePiece = newPiece;
+  gameState.activePiece = clampPiece(newPiece);
 }
 
+// ---------------------------------------------------------------------------
+// Place the active piece — core turn sequence
+// ---------------------------------------------------------------------------
 function placePiece() {
   const { activePiece, grid } = gameState;
   if (!isValidPlacement(activePiece, grid)) return;
 
-  // Lock piece
   lockPiece(activePiece, grid);
 
   // Cluster detection + clearing
   const clusters = findClusters(grid);
-  let clearedCells = [];
+  let allClearedCells = [];
   if (clusters.length > 0) {
-    for (const cluster of clusters) clearedCells = clearedCells.concat(cluster);
+    for (const cluster of clusters) allClearedCells = allClearedCells.concat(cluster);
     const events = clearClusters(grid, clusters);
-    flashCells(renderer, clearedCells);
+    flashCells(renderer, allClearedCells);
 
-    // Score for clusters
-    const baseScore = clearedCells.length * SCORE.clusterCell;
+    const baseScore = allClearedCells.length * SCORE.clusterCell;
     const bonus = Math.max(0, clusters.length - 1) * SCORE.clusterBonus;
     gameState.score += baseScore + bonus;
-    if (clusters.length > 1) {
-      logEvent(gameState, `${clusters.length}x cluster! +${baseScore + bonus} pts`);
-    } else {
-      logEvent(gameState, `Cluster cleared! +${baseScore} pts`);
-    }
+    logEvent(gameState,
+      clusters.length > 1
+        ? `${clusters.length}x combo! +${baseScore + bonus} pts`
+        : `Cluster! +${baseScore} pts`
+    );
 
-    // Spawn revealed entities
     spawnRevealedEntities(grid, events);
   }
 
   gameState.turnCount++;
 
-  // Entity turns
-  const { moved, trapped } = runAdventurerTurn(gameState.adventurer, grid, gameState);
+  const { trapped } = runAdventurerTurn(gameState.adventurer, grid, gameState);
   if (trapped) logEvent(gameState, 'Adventurer is trapped!');
 
-  // Check win (adventurer on stairs)
   if (checkWin()) return;
 
   runMonstersTurn(grid, gameState);
   resolveCombat(grid, gameState);
 
   if (gameState.phase === 'GAME_OVER') return;
-
-  // Check win again after combat (edge case: adventurer pushed onto stairs somehow)
   if (checkWin()) return;
 
-  // Next piece
   gameState.activePiece = gameState.nextPiece;
-  gameState.nextPiece   = makePiece();
+  gameState.nextPiece   = makePiece(gameState);
 
-  // Check if no valid placement exists anywhere → GAME_OVER
   if (!anyValidPlacement(grid, gameState.activePiece)) {
     gameState.phase = 'GAME_OVER';
     logEvent(gameState, 'No space left! Game over.');
   }
 }
 
+// ---------------------------------------------------------------------------
+// Spawn entities freed by cluster clearing.
+// Treasure value scales with clusterSize.
+// ---------------------------------------------------------------------------
 function spawnRevealedEntities(grid, events) {
-  for (const ev of events) {
-    const { type, row, col, descriptor } = ev;
+  for (const { type, row, col, descriptor, clusterSize } of events) {
 
     if (type === 'stairs') {
-      // Find nearest empty cell to place stairs
       const pos = findEmptyNear(grid, row, col);
       if (!pos) continue;
       grid.stairs = pos;
-      placeEntity(grid, pos.row, pos.col, 'stairs', { row: pos.row, col: pos.col });
+      placeEntity(grid, pos.row, pos.col, 'stairs', pos);
+      gameState.stairsPending = false;
       logEvent(gameState, 'Stairs to next level revealed!');
       continue;
     }
 
     if (type === 'monster') {
       const adv = gameState.adventurer;
-      // Don't spawn adjacent to adventurer if it's a dragon
       if (descriptor.monsterType === 'dragon') {
         const dist = Math.abs(row - adv.row) + Math.abs(col - adv.col);
-        if (dist <= 2) {
-          // Defer — put back in pool (simple: just skip)
-          logEvent(gameState, 'A dragon lurks nearby...');
-          continue;
-        }
+        if (dist <= 2) { logEvent(gameState, 'A dragon lurks...'); continue; }
       }
       const pos = findEmptyNear(grid, row, col);
       if (!pos) continue;
@@ -216,7 +213,11 @@ function spawnRevealedEntities(grid, events) {
     if (type === 'treasure') {
       const pos = findEmptyNear(grid, row, col);
       if (!pos) continue;
-      const treasure = createTreasure(descriptor.treasureType, descriptor.value, pos.row, pos.col);
+      // Scale gold value by cluster size; equipment unchanged
+      const scaledValue = descriptor.treasureType === 'gold'
+        ? Math.round(descriptor.value * (clusterSize / CLUSTER_MIN_SIZE))
+        : descriptor.value;
+      const treasure = createTreasure(descriptor.treasureType, scaledValue, pos.row, pos.col);
       grid.treasures.push(treasure);
       placeEntity(grid, pos.row, pos.col, 'treasure', treasure);
       continue;
@@ -224,8 +225,10 @@ function spawnRevealedEntities(grid, events) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// BFS outward search for nearest empty unlocked cell
+// ---------------------------------------------------------------------------
 function findEmptyNear(grid, row, col) {
-  // Spiral search outward for an unoccupied, unlocked cell
   const visited = new Set();
   const queue = [{ row, col }];
   visited.add(`${row},${col}`);
@@ -241,24 +244,19 @@ function findEmptyNear(grid, row, col) {
       visited.add(key);
       queue.push({ row: nr, col: nc });
     }
-    if (visited.size > 60) break; // give up after searching ~60 cells
+    if (visited.size > 80) break;
   }
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Win condition check
+// ---------------------------------------------------------------------------
 function checkWin() {
   const adv = gameState.adventurer;
-  const cell = getCell(gameState.grid, adv.row, adv.col);
-  if (cell && cell.entity === 'stairs') {
-    gameState.score += SCORE.levelComplete;
-    gameState.phase = 'LEVEL_COMPLETE';
-    logEvent(gameState, `Level ${gameState.level} complete! +${SCORE.levelComplete} pts`);
-    return true;
-  }
-  // Also check if adventurer IS at stairs position
-  if (gameState.grid.stairs &&
-      adv.row === gameState.grid.stairs.row &&
-      adv.col === gameState.grid.stairs.col) {
+  const stairPos = gameState.grid.stairs;
+  if (!stairPos) return false;
+  if (adv.row === stairPos.row && adv.col === stairPos.col) {
     gameState.score += SCORE.levelComplete;
     gameState.phase = 'LEVEL_COMPLETE';
     logEvent(gameState, `Level ${gameState.level} complete! +${SCORE.levelComplete} pts`);
@@ -267,10 +265,12 @@ function checkWin() {
   return false;
 }
 
+// ---------------------------------------------------------------------------
+// Check if the active piece has any valid placement on the grid
+// ---------------------------------------------------------------------------
 function anyValidPlacement(grid, piece) {
-  // Sample a subset of positions rather than all ROWS*COLS (performance)
-  for (let r = 0; r < ROWS - 2; r += 2) {
-    for (let c = 0; c < COLS - 2; c += 2) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
       const testPiece = { ...piece, row: r, col: c };
       if (isValidPlacement(testPiece, grid)) return true;
     }
@@ -292,7 +292,7 @@ function onKeyDown(e) {
     case 'z': case 'Z': handleAction('rotateCCW'); break;
     case 'p': case 'P': handleAction('pause');     break;
     case 'r': case 'R': handleAction('restart');   break;
-    case 'Enter':       handleAction('next-level');break;
+    case 'Enter':       handleAction('next-level'); break;
   }
 }
 
@@ -301,12 +301,9 @@ function onKeyDown(e) {
 // ---------------------------------------------------------------------------
 function wireButtons() {
   const btns = {
-    'btn-left':   'left',
-    'btn-right':  'right',
-    'btn-up':     'up',
-    'btn-down':   'down',
-    'btn-place':  'place',
-    'btn-rotcw':  'rotateCW',
+    'btn-left':   'left',   'btn-right':  'right',
+    'btn-up':     'up',     'btn-down':   'down',
+    'btn-place':  'place',  'btn-rotcw':  'rotateCW',
     'btn-rotccw': 'rotateCCW',
   };
   for (const [id, action] of Object.entries(btns)) {
@@ -321,12 +318,8 @@ function wireButtons() {
 // ---------------------------------------------------------------------------
 // Responsive layout
 // ---------------------------------------------------------------------------
-function detectPortrait() {
-  return window.innerHeight > window.innerWidth;
-}
-
 function applyLayout() {
-  portrait = detectPortrait();
+  portrait = window.innerHeight > window.innerWidth;
   const container = document.getElementById('game-container');
   const btnPanel  = document.getElementById('btn-panel');
   const hudTop    = document.getElementById('hud-top');
@@ -342,11 +335,9 @@ function applyLayout() {
 function loop() {
   if (gameState) {
     render(renderer, gameState);
-    if (portrait && gameState.phase !== 'GAME_OVER') {
-      updatePortraitHUD(gameState);
-    }
+    if (portrait) updatePortraitHUD(gameState);
   }
-  animFrameId = requestAnimationFrame(loop);
+  requestAnimationFrame(loop);
 }
 
 // ---------------------------------------------------------------------------
@@ -373,7 +364,6 @@ export function initGame() {
   loop();
 }
 
-// Auto-init on DOMContentLoaded
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initGame);
 } else {

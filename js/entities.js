@@ -70,6 +70,11 @@ export function runAdventurerTurn(adv, grid, gameState) {
     const step = computeNextStep(adv, grid, gameState);
     if (!step) break;
 
+    // Check what's at the destination before moving
+    const destCell = getCell(grid, step.row, step.col);
+    const destTreasure = (destCell && destCell.entity === 'treasure') ? destCell.entityRef : null;
+    const isStairs     = destCell && destCell.entity === 'stairs';
+
     // Move adventurer
     removeEntity(grid, adv.row, adv.col);
     adv.row = step.row;
@@ -78,14 +83,8 @@ export function runAdventurerTurn(adv, grid, gameState) {
     moved = true;
     movesLeft--;
 
-    // Collect treasure if landed on it
-    const cell = getCell(grid, adv.row, adv.col);
-    if (cell && cell.entity === 'treasure') {
-      collectTreasure(adv, cell.entityRef, grid, gameState);
-    }
-
-    // Stop if we've reached stairs
-    if (cell && cell.entity === 'stairs') break;
+    if (destTreasure) collectTreasure(adv, destTreasure, grid, gameState);
+    if (isStairs) break;
   }
 
   // Check trapped (no passable neighbors)
@@ -174,11 +173,12 @@ export function collectTreasure(adv, treasure, grid, gameState) {
         logEvent(gameState, 'Found Armor (already equipped).');
       }
       break;
-    case 'potion':
+    case 'potion': {
       const restored = Math.min(TREASURE_TYPES.potion.hpRestore, adv.maxHp - adv.hp);
       adv.hp = Math.min(adv.maxHp, adv.hp + TREASURE_TYPES.potion.hpRestore);
       logEvent(gameState, `Drank a Potion! (+${restored} HP)`);
       break;
+    }
   }
 }
 

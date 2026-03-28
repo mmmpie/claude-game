@@ -1,16 +1,18 @@
 import { TETROMINOES, TETROMINO_TYPES, COLOR_NAMES, COLS, ROWS } from './constants.js';
-import { getCell, drawContent, setCell } from './grid.js';
+import { getCell, setCell } from './grid.js';
 
 // ---------------------------------------------------------------------------
-// Create a new active piece at the center-top of the grid
+// Create a new active piece, spawning at the center of the grid.
+// cellContents: array of 4 ContentDescriptor|null values, one per piece cell.
 // ---------------------------------------------------------------------------
-export function createPiece(type, color) {
+export function createPiece(type, color, cellContents) {
   return {
     type,
     color,
     rotationIndex: 0,
-    row: 0,
-    col: Math.floor(COLS / 2) - 2,
+    row: Math.floor((ROWS - 4) / 2),   // vertically centered
+    col: Math.floor((COLS - 4) / 2),   // horizontally centered
+    cellContents: cellContents || [null, null, null, null],
   };
 }
 
@@ -33,16 +35,14 @@ export function movePiece(piece, dRow, dCol) {
 // Rotate piece clockwise or counter-clockwise
 // ---------------------------------------------------------------------------
 export function rotatePiece(piece, direction) {
-  // direction: 1 = CW (X key), -1 = CCW (Z key)
   const numRotations = TETROMINOES[piece.type].length;
   const newIdx = ((piece.rotationIndex + direction) % numRotations + numRotations) % numRotations;
   return { ...piece, rotationIndex: newIdx };
 }
 
 // ---------------------------------------------------------------------------
-// Validate that a piece can be placed at its current position
-// A placement is valid if all cells are in-bounds and unoccupied (not locked,
-// not an entity cell that blocks placement: adventurer, monster, stairs)
+// Validate that a piece can be placed at its current position.
+// Blocked by: out-of-bounds, locked cells, adventurer, monsters, stairs, treasure.
 // ---------------------------------------------------------------------------
 export function isValidPlacement(piece, grid) {
   const cells = getPieceCells(piece);
@@ -51,30 +51,30 @@ export function isValidPlacement(piece, grid) {
     const cell = getCell(grid, row, col);
     if (!cell) return false;
     if (cell.locked) return false;
-    // Cannot place on top of adventurer, monsters, or stairs
-    if (cell.entity === 'adventurer' || cell.entity === 'monster' || cell.entity === 'stairs') return false;
+    if (cell.entity === 'adventurer' || cell.entity === 'monster' ||
+        cell.entity === 'stairs'     || cell.entity === 'treasure') return false;
   }
   return true;
 }
 
 // ---------------------------------------------------------------------------
-// Lock piece onto the grid — write color, locked flag, and maybe content
+// Lock piece onto the grid.
+// Content is written immediately and visible (no hidden state).
 // ---------------------------------------------------------------------------
 export function lockPiece(piece, grid) {
   const cells = getPieceCells(piece);
-  for (const { row, col } of cells) {
-    const content = drawContent(grid);
+  for (let i = 0; i < cells.length; i++) {
+    const { row, col } = cells[i];
     setCell(grid, row, col, {
       color: piece.color,
       locked: true,
-      content: content || null,
-      revealed: false,
+      content: piece.cellContents[i] || null,
     });
   }
 }
 
 // ---------------------------------------------------------------------------
-// Random piece type (7-bag would be ideal but simple random is fine here)
+// Random generators
 // ---------------------------------------------------------------------------
 export function randomType() {
   return TETROMINO_TYPES[Math.floor(Math.random() * TETROMINO_TYPES.length)];
@@ -85,8 +85,7 @@ export function randomColor() {
 }
 
 // ---------------------------------------------------------------------------
-// Clamp piece position so it stays within grid bounds (used when wrapping
-// the cursor around the edge or after rotation makes it go OOB)
+// Clamp piece so all its cells remain within grid bounds
 // ---------------------------------------------------------------------------
 export function clampPiece(piece) {
   const cells = getPieceCells(piece);
