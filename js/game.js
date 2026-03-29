@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=17';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=17';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=17';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=17';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=17';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=18';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=18';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=18';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=18';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=18';
 
 // ---------------------------------------------------------------------------
 // Game state

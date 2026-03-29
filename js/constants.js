@@ -79,11 +79,11 @@ export const FA_FONT   = '"Font Awesome 6 Free"';
 export const FA_WEIGHT = '900';
 
 export const FA_ICONS = {
-  adventurer: '\uf554',  // fa-person-hiking
+  adventurer: '\uf6ec',  // fa-person-hiking
   stairs:     '\ue289',  // fa-stairs
   dragon:     '\uf6d5',  // fa-dragon       (red)
   ghost:      '\uf6e2',  // fa-ghost        (blue)
-  spaghetti:  '\uf72c',  // fa-spider       (green — tentacles = noodles)
+  spaghetti:  '\uf717',  // fa-spider       (green — tentacles = noodles)
   skull:      '\uf54c',  // fa-skull        (yellow)
   gold:       '\uf51e',  // fa-coins
   sword:      '\uf0e3',  // fa-gavel
