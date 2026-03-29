@@ -1,6 +1,6 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=14';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=14';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=14';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=15';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=15';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=15';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -13,33 +13,27 @@ export function createAdventurer(row, col) {
     attack: ADVENTURER_BASE.attack,
     defense: ADVENTURER_BASE.defense,
     gold: 0,
-    sword: null,   // { attackBonus }
-    armor: null,   // { defenseBonus }
     alive: true,
     currentGoal: null,  // {row,col} of current navigation target — used by renderer
   };
 }
 
-export function adventurerAttack(adv) {
-  return adv.attack + (adv.sword ? adv.sword.attackBonus : 0);
-}
-
-export function adventurerDefense(adv) {
-  return adv.defense + (adv.armor ? adv.armor.defenseBonus : 0);
-}
+export function adventurerAttack(adv)  { return adv.attack; }
+export function adventurerDefense(adv) { return adv.defense; }
 
 // ---------------------------------------------------------------------------
 // Monster
 // ---------------------------------------------------------------------------
-export function createMonster(monsterType, row, col) {
+// level controls max random attack/defense (0..level inclusive)
+export function createMonster(monsterType, row, col, level = 1) {
   const stats = MONSTER_STATS[monsterType];
   return {
     type: monsterType,
     row, col,
     hp: stats.hp,
     maxHp: stats.hp,
-    attack: stats.attack,
-    defense: stats.defense,
+    attack:  Math.floor(Math.random() * (level + 1)),
+    defense: Math.floor(Math.random() * (level + 1)),
     xpValue: stats.xpValue,
     alive: true,
   };
@@ -169,22 +163,14 @@ export function collectTreasure(adv, treasure, grid, gameState) {
       logEvent(gameState, `Found ${treasure.value} gold!`);
       break;
     case 'sword':
-      if (!adv.sword || treasure.value > (adv.sword?.attackBonus ?? 0)) {
-        adv.sword = { attackBonus: TREASURE_TYPES.sword.attackBonus };
-        logEvent(gameState, 'Found a Sword! (+3 ATK)');
-      } else {
-        adv.gold += 5; gameState.score += 5;
-        logEvent(gameState, 'Found a Sword (already equipped).');
-      }
+      adv.attack += TREASURE_TYPES.sword.attackBonus;
+      gameState.score += 5;
+      logEvent(gameState, `Found a Sword! (ATK now ${adv.attack})`);
       break;
     case 'armor':
-      if (!adv.armor) {
-        adv.armor = { defenseBonus: TREASURE_TYPES.armor.defenseBonus };
-        logEvent(gameState, 'Found Armor! (+2 DEF)');
-      } else {
-        adv.gold += 5; gameState.score += 5;
-        logEvent(gameState, 'Found Armor (already equipped).');
-      }
+      adv.defense += TREASURE_TYPES.armor.defenseBonus;
+      gameState.score += 5;
+      logEvent(gameState, `Found a Shield! (DEF now ${adv.defense})`);
       break;
     case 'potion': {
       const restored = Math.min(TREASURE_TYPES.potion.hpRestore, adv.maxHp - adv.hp);
@@ -205,7 +191,21 @@ export function runSingleMonsterTurn(monster, grid, gameState) {
   if (isAdjacentCoords(monster.row, monster.col, adv.row, adv.col)) return;
 
   const path = bfs(grid, monster, adv, { forEntity: 'monster', adjacentGoal: true });
-  if (!path || path.length === 0) return;
+  if (!path || path.length === 0) {
+    // Can't reach adventurer — move to a random passable neighbour instead
+    const dirs = [[-1,0],[1,0],[0,-1],[0,1]].sort(() => Math.random() - 0.5);
+    for (const [dr, dc] of dirs) {
+      const nr = monster.row + dr, nc = monster.col + dc;
+      const nc2 = getCell(grid, nr, nc);
+      if (nc2 && !nc2.locked && !nc2.entity) {
+        removeEntity(grid, monster.row, monster.col);
+        monster.row = nr; monster.col = nc;
+        placeEntity(grid, nr, nc, 'monster', monster);
+        break;
+      }
+    }
+    return;
+  }
 
   const step = path[0];
   const cell = getCell(grid, step.row, step.col);

@@ -1,5 +1,5 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=14';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=14';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=15';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=15';
 
 // ---------------------------------------------------------------------------
 // Renderer state
@@ -343,11 +343,7 @@ function drawHUD(ctx, renderer, gameState) {
   y += barH + lineH * 0.6;
 
   ctx.fillStyle = '#BDC3C7';
-  const atk = adventurer.attack + (adventurer.sword?.attackBonus ?? 0);
-  const def = adventurer.defense + (adventurer.armor?.defenseBonus ?? 0);
-  ctx.fillText(`ATK: ${atk}  DEF: ${def}`, x, y); y += lineH;
-  ctx.fillText(`Sword: ${adventurer.sword ? 'Yes' : 'None'}`, x, y); y += lineH;
-  ctx.fillText(`Armor: ${adventurer.armor ? 'Yes' : 'None'}`, x, y); y += lineH * 1.5;
+  ctx.fillText(`ATK: ${adventurer.attack}  DEF: ${adventurer.defense}`, x, y); y += lineH * 1.5;
 
   ctx.fillStyle = '#ECF0F1';
   ctx.font = 'bold 13px monospace';

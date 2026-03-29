@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=14';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=14';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=14';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=14';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=14';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=15';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=15';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=15';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=15';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=15';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -99,7 +99,7 @@ function placeSeedPiece(state, grid) {
   // Every cell must contain a monster or treasure — retry until non-null
   const cellContents = Array.from({ length: 4 }, () => {
     let c;
-    do { c = generateCellContent(state.level); } while (!c);
+    do { c = generateCellContent(state.level, color); } while (!c);
     return c;
   });
 
@@ -129,10 +129,11 @@ function removeEntitySafe(grid, entity) {
 // Build a new piece with monster/treasure content assigned at instantiation.
 // ---------------------------------------------------------------------------
 function makePiece(gameState) {
+  const color = randomColor();
   const cellContents = Array.from({ length: 4 }, () =>
-    generateCellContent(gameState.level)
+    generateCellContent(gameState.level, color)
   );
-  return createPiece(randomType(), randomColor(), cellContents);
+  return createPiece(randomType(), color, cellContents);
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +269,7 @@ function spawnRevealedEntities(grid, events) {
       // Spawn at the exact cleared cell; cleared cells are guaranteed empty here
       const cell = getCell(grid, row, col);
       if (!cell || cell.entity) continue;
-      const monster = createMonster(descriptor.monsterType, row, col);
+      const monster = createMonster(descriptor.monsterType, row, col, gameState.level);
       monster.justSpawned = true;   // skip movement this turn
       grid.monsters.push(monster);
       placeEntity(grid, row, col, 'monster', monster);

@@ -1,4 +1,4 @@
-import { COLS, ROWS, CLUSTER_MIN_SIZE, monsterWeights } from './constants.js?v=14';
+import { COLS, ROWS, CLUSTER_MIN_SIZE, COLOR_MONSTER } from './constants.js?v=15';
 
 // ---------------------------------------------------------------------------
 // Cell factory
@@ -49,23 +49,22 @@ export function setCell(grid, row, col, fields) {
 
 // ---------------------------------------------------------------------------
 // Generate content for a single piece cell at instantiation time.
-// Stairs is never produced here — it is placed directly on the playfield
-// at the start of each level.
+// Monster type is determined by the piece colour.
+// Stairs is never produced here — it is placed directly on the playfield.
 // ---------------------------------------------------------------------------
-export function generateCellContent(level) {
-  const r2 = Math.random();
-  if (r2 < 0.18) {
-    // Monster
-    return { type: 'monster', monsterType: weightedPick(monsterWeights(level)) };
+export function generateCellContent(level, color) {
+  const r = Math.random();
+  if (r < 0.35) {
+    const monsterType = COLOR_MONSTER[color] || 'ghost';
+    return { type: 'monster', monsterType };
   }
-  if (r2 < 0.38) {
-    // Treasure
+  if (r < 0.60) {
     const ttypes = ['gold', 'gold', 'gold', 'potion', 'sword', 'armor'];
     const ttype = ttypes[Math.floor(Math.random() * ttypes.length)];
     const value = ttype === 'gold' ? 5 + Math.floor(Math.random() * 16) : 0;
     return { type: 'treasure', treasureType: ttype, value };
   }
-  return null; // empty cell
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,15 +157,4 @@ export function removeEntity(grid, row, col) {
   cell.entityRef = null;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function weightedPick(weights) {
-  const total = Object.values(weights).reduce((a, b) => a + b, 0);
-  let r = Math.random() * total;
-  for (const [key, w] of Object.entries(weights)) {
-    r -= w;
-    if (r <= 0) return key;
-  }
-  return Object.keys(weights)[0];
-}
+
