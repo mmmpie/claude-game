@@ -1,6 +1,6 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=9';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=9';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=9';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=10';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=10';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=10';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -16,6 +16,7 @@ export function createAdventurer(row, col) {
     sword: null,   // { attackBonus }
     armor: null,   // { defenseBonus }
     alive: true,
+    currentGoal: null,  // {row,col} of current navigation target — used by renderer
   };
 }
 
@@ -101,7 +102,10 @@ function computeNextStep(adv, grid, gameState) {
   for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
     const nr = adv.row + dr, nc = adv.col + dc;
     const cell = getCell(grid, nr, nc);
-    if (cell && !cell.locked && cell.entity === 'treasure') return { row: nr, col: nc };
+    if (cell && !cell.locked && cell.entity === 'treasure') {
+      adv.currentGoal = { row: nr, col: nc };
+      return { row: nr, col: nc };
+    }
   }
 
   // Gather all visible treasures and stairs as targets
@@ -123,17 +127,21 @@ function computeNextStep(adv, grid, gameState) {
     }
   }
 
-  if (targets.length === 0) return null;
+  if (targets.length === 0) { adv.currentGoal = null; return null; }
 
   const result = findNearest(grid, adv, targets, { forEntity: 'adventurer' });
   if (!result || result.path.length === 0) {
-    // If we can't reach any target, try stairs directly
     if (grid.stairs) {
       const stairPath = bfs(grid, adv, grid.stairs, { forEntity: 'adventurer' });
-      if (stairPath && stairPath.length > 0) return stairPath[0];
+      if (stairPath && stairPath.length > 0) {
+        adv.currentGoal = { row: grid.stairs.row, col: grid.stairs.col };
+        return stairPath[0];
+      }
     }
+    adv.currentGoal = null;
     return null;
   }
+  adv.currentGoal = { row: result.target.row, col: result.target.col };
   return result.path[0];
 }
 

@@ -1,5 +1,5 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=9';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=9';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=10';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=10';
 
 // ---------------------------------------------------------------------------
 // Renderer state
@@ -70,6 +70,7 @@ export function render(renderer, gameState) {
   drawBackground(ctx, renderer);
   drawLockedCells(ctx, renderer, grid);
   if (activePiece) drawActivePiece(ctx, renderer, activePiece, grid);
+  drawGoalHighlight(ctx, renderer, adventurer);
   drawEntities(ctx, renderer, grid, adventurer);
   drawFlashEffects(ctx, renderer);
   if (renderer.hudX !== null) drawHUD(ctx, renderer, gameState);
@@ -198,6 +199,24 @@ function drawContentGlyph(ctx, cx, cy, cellSize, content, alpha) {
     ctx.fillText(FA_ICONS.stairs, cx, cy);
   }
 
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Goal highlight — white circle around the adventurer's current target cell
+// ---------------------------------------------------------------------------
+function drawGoalHighlight(ctx, renderer, adventurer) {
+  if (!adventurer || !adventurer.currentGoal) return;
+  const { cellSize, offsetX, offsetY } = renderer;
+  const { row, col } = adventurer.currentGoal;
+  const cx = offsetX + col * cellSize + cellSize / 2;
+  const cy = offsetY + row * cellSize + cellSize / 2;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, cellSize * 0.42, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 
