@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=19';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=19';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=19';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=19';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=19';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=20';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=20';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=20';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=20';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=20';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -11,6 +11,8 @@ let gameState    = null;
 let renderer     = null;
 let portrait     = false;
 let pendingSteps = [];   // step queue for frame-by-frame turn animation
+let lastAutoTick = 0;   // timestamp of last automatic entity movement
+const AUTO_TICK_MS = 1000;
 
 // Drag state for canvas touch movement
 let dragActive    = false;
@@ -170,6 +172,37 @@ function handleAction(action) {
 }
 
 // ---------------------------------------------------------------------------
+// Queue entity movement steps (adventurer + monsters + combat).
+// onDone() is called in the final step after combat resolves.
+// ---------------------------------------------------------------------------
+function queueEntityMoves(onDone) {
+  const { grid } = gameState;
+  const monstersThisTurn = grid.monsters.filter(m => m.alive);
+  gameState.phase = 'ANIMATING';
+  pendingSteps = [
+    // Step 1 — move adventurer
+    () => {
+      const { trapped } = runAdventurerTurn(gameState.adventurer, grid, gameState);
+      if (trapped) logEvent(gameState, 'Adventurer is trapped!');
+      checkWin();
+    },
+    // Steps 2…N — move each monster individually
+    ...monstersThisTurn.map(monster => () => {
+      if (gameState.phase !== 'ANIMATING') return;
+      runSingleMonsterTurn(monster, grid, gameState);
+    }),
+    // Final step — resolve combat then call onDone
+    () => {
+      if (gameState.phase !== 'ANIMATING') return;
+      resolveCombat(grid, gameState);
+      if (gameState.phase === 'GAME_OVER') return;
+      if (checkWin()) return;
+      onDone();
+    },
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // Place the active piece.
 // Locks the piece + clears clusters synchronously (so the next render shows
 // the final playfield), then queues the remaining turn steps so each one
@@ -205,46 +238,21 @@ function placePiece() {
   }
 
   gameState.turnCount++;
+  lastAutoTick = performance.now(); // reset auto-tick so entities don't double-move
 
-  // Snapshot living monsters now so the queue captures the current roster
-  const monstersThisTurn = grid.monsters.filter(m => m.alive);
+  queueEntityMoves(() => {
+    gameState.activePiece = clampPiece(
+      { ...gameState.nextPiece, row: spawnRow, col: spawnCol }
+    );
+    gameState.nextPiece = makePiece(gameState);
 
-  // Queue: adventurer move → each monster move → combat + advance piece.
-  // Each step runs on its own animation frame so the board is rendered
-  // between every action.
-  gameState.phase = 'ANIMATING';
-  pendingSteps = [
-    // Step 1 — move adventurer
-    () => {
-      const { trapped } = runAdventurerTurn(gameState.adventurer, grid, gameState);
-      if (trapped) logEvent(gameState, 'Adventurer is trapped!');
-      checkWin();
-    },
-    // Steps 2…N — move each monster individually
-    ...monstersThisTurn.map(monster => () => {
-      if (gameState.phase !== 'ANIMATING') return;
-      runSingleMonsterTurn(monster, grid, gameState);
-    }),
-    // Final step — resolve combat then hand control back to the player
-    () => {
-      if (gameState.phase !== 'ANIMATING') return;
-      resolveCombat(grid, gameState);
-      if (gameState.phase === 'GAME_OVER') return;
-      if (checkWin()) return;
-
-      gameState.activePiece = clampPiece(
-        { ...gameState.nextPiece, row: spawnRow, col: spawnCol }
-      );
-      gameState.nextPiece = makePiece(gameState);
-
-      if (!anyValidPlacement(grid, gameState.activePiece)) {
-        gameState.phase = 'GAME_OVER';
-        logEvent(gameState, 'No space left! Game over.');
-      } else {
-        gameState.phase = 'PLACING';
-      }
-    },
-  ];
+    if (!anyValidPlacement(grid, gameState.activePiece)) {
+      gameState.phase = 'GAME_OVER';
+      logEvent(gameState, 'No space left! Game over.');
+    } else {
+      gameState.phase = 'PLACING';
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -431,10 +439,18 @@ function applyLayout() {
 }
 
 // ---------------------------------------------------------------------------
-// Game loop — executes one pending turn step per frame when animating
+// Game loop — executes one pending turn step per frame when animating;
+// also fires automatic entity movement every AUTO_TICK_MS milliseconds.
 // ---------------------------------------------------------------------------
-function loop() {
+function loop(timestamp) {
   if (gameState) {
+    // Auto-tick: move entities once per second when idle
+    if (gameState.phase === 'PLACING' && timestamp - lastAutoTick >= AUTO_TICK_MS) {
+      lastAutoTick = timestamp;
+      gameState.turnCount++;
+      queueEntityMoves(() => { gameState.phase = 'PLACING'; });
+    }
+
     if (gameState.phase === 'ANIMATING' && pendingSteps.length > 0) {
       const step = pendingSteps.shift();
       step();
@@ -452,6 +468,7 @@ function loop() {
 // ---------------------------------------------------------------------------
 function startGame() {
   pendingSteps = [];
+  lastAutoTick = performance.now();
   gameState = newGameState();
   initLevel(gameState, 1);
 }
