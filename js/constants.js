@@ -86,7 +86,7 @@ export const FA_ICONS = {
   spaghetti:  '\uf72c',  // fa-spider       (green — tentacles = noodles)
   skull:      '\uf54c',  // fa-skull        (yellow)
   gold:       '\uf51e',  // fa-coins
-  sword:      '\uf66d',  // fa-khanda       (ceremonial double-edged sword)
+  sword:      '\uf0e3',  // fa-gavel
   armor:      '\uf132',  // fa-shield
   potion:     '\uf0c3',  // fa-flask
 };
