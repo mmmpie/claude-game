@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=8';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=8';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=8';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=8';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=8';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=9';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=9';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=9';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=9';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=9';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -105,7 +105,7 @@ function handleAction(action) {
     if (phase === 'PAUSED')  { gameState.phase = 'PLACING'; return; }
     return;
   }
-  if (action === 'restart' && phase === 'GAME_OVER') { pendingSteps = []; startGame(); return; }
+  if ((action === 'restart' || action === 'place') && phase === 'GAME_OVER') { pendingSteps = []; startGame(); return; }
   if ((action === 'next-level' || action === 'place') && phase === 'LEVEL_COMPLETE') {
     pendingSteps = [];
     initLevel(gameState, gameState.level + 1);
