@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=12';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=12';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=12';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=12';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=12';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=13';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=13';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=13';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=13';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=13';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -11,6 +11,11 @@ let gameState    = null;
 let renderer     = null;
 let portrait     = false;
 let pendingSteps = [];   // step queue for frame-by-frame turn animation
+
+// Drag state for canvas touch movement
+let dragActive    = false;
+let dragOffsetRow = 0;
+let dragOffsetCol = 0;
 
 function newGameState() {
   return {
@@ -352,6 +357,52 @@ function wireButtons() {
 }
 
 // ---------------------------------------------------------------------------
+// Canvas drag-to-move touch support
+// ---------------------------------------------------------------------------
+
+// Convert a client-space touch coordinate to a grid {row, col}.
+// Returns null when the touch is outside the grid area.
+function screenToGrid(clientX, clientY) {
+  const canvas = renderer.canvas;
+  const rect   = canvas.getBoundingClientRect();
+  // Account for CSS scaling of the canvas element
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const cx = (clientX - rect.left) * scaleX;
+  const cy = (clientY - rect.top)  * scaleY;
+  const col = Math.floor((cx - renderer.offsetX) / renderer.cellSize);
+  const row = Math.floor((cy - renderer.offsetY) / renderer.cellSize);
+  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return null;
+  return { row, col };
+}
+
+function onCanvasTouchStart(e) {
+  if (gameState?.phase !== 'PLACING') return;
+  const piece = gameState.activePiece;
+  if (!piece) return;
+  e.preventDefault();
+  const pos = screenToGrid(e.touches[0].clientX, e.touches[0].clientY);
+  if (!pos) return;
+  dragActive    = true;
+  dragOffsetRow = pos.row - piece.row;
+  dragOffsetCol = pos.col - piece.col;
+}
+
+function onCanvasTouchMove(e) {
+  if (!dragActive || gameState?.phase !== 'PLACING') return;
+  e.preventDefault();
+  const pos = screenToGrid(e.touches[0].clientX, e.touches[0].clientY);
+  if (!pos) return;
+  const piece    = gameState.activePiece;
+  const newPiece = { ...piece, row: pos.row - dragOffsetRow, col: pos.col - dragOffsetCol };
+  gameState.activePiece = clampPiece(newPiece);
+}
+
+function onCanvasTouchEnd() {
+  dragActive = false;
+}
+
+// ---------------------------------------------------------------------------
 // Responsive layout
 // ---------------------------------------------------------------------------
 function applyLayout() {
@@ -402,6 +453,12 @@ export function initGame() {
   window.addEventListener('resize', applyLayout);
   document.addEventListener('keydown', onKeyDown);
   wireButtons();
+
+  // Canvas drag-to-move (touch)
+  canvas.addEventListener('touchstart',  onCanvasTouchStart, { passive: false });
+  canvas.addEventListener('touchmove',   onCanvasTouchMove,  { passive: false });
+  canvas.addEventListener('touchend',    onCanvasTouchEnd);
+  canvas.addEventListener('touchcancel', onCanvasTouchEnd);
 
   // Wait for Font Awesome to load before rendering any glyphs
   const fontSpec = '900 1em "Font Awesome 6 Free"';
