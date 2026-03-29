@@ -1,6 +1,6 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=18';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=18';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=18';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=19';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=19';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=19';
 
 // ---------------------------------------------------------------------------
 // Adventurer

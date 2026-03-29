@@ -74,8 +74,8 @@ export const TETROMINOES = {
 };
 export const TETROMINO_TYPES = ['I','O','T','S','Z','J','L'];
 
-// Font Awesome 6 Free Solid — font family and per-entity icon codepoints
-export const FA_FONT   = '"Font Awesome 6 Free"';
+// Font Awesome 7 Free Solid — font family and per-entity icon codepoints
+export const FA_FONT   = '"Font Awesome 7 Free"';
 export const FA_WEIGHT = '900';
 
 export const FA_ICONS = {
