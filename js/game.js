@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=16';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=16';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=16';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=16';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=16';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=17';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=17';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=17';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=17';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=17';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -96,12 +96,8 @@ function pickStairsCorner() {
 function placeSeedPiece(state, grid) {
   const type  = randomType();
   const color = randomColor();
-  // Every cell must contain a monster or treasure — retry until non-null
-  const cellContents = Array.from({ length: 4 }, () => {
-    let c;
-    do { c = generateCellContent(state.level, color); } while (!c);
-    return c;
-  });
+  // Every cell must contain a monster or treasure — unique types per piece
+  const cellContents = generateForcedPieceContents(state.level, color);
 
   // Try random positions; try all rotations at each — grid is nearly empty
   // so a valid placement is found quickly
@@ -130,9 +126,7 @@ function removeEntitySafe(grid, entity) {
 // ---------------------------------------------------------------------------
 function makePiece(gameState) {
   const color = randomColor();
-  const cellContents = Array.from({ length: 4 }, () =>
-    generateCellContent(gameState.level, color)
-  );
+  const cellContents = generatePieceContents(gameState.level, color);
   return createPiece(randomType(), color, cellContents);
 }
 

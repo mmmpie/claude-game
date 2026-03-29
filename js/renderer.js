@@ -1,5 +1,5 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=16';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=16';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=17';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=17';
 
 // ---------------------------------------------------------------------------
 // Renderer state

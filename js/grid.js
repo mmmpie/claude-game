@@ -1,4 +1,4 @@
-import { COLS, ROWS, CLUSTER_MIN_SIZE, COLOR_MONSTER } from './constants.js?v=16';
+import { COLS, ROWS, CLUSTER_MIN_SIZE, COLOR_MONSTER } from './constants.js?v=17';
 
 // ---------------------------------------------------------------------------
 // Cell factory
@@ -48,23 +48,48 @@ export function setCell(grid, row, col, fields) {
 }
 
 // ---------------------------------------------------------------------------
-// Generate content for a single piece cell at instantiation time.
-// Monster type is determined by the piece colour.
-// Stairs is never produced here — it is placed directly on the playfield.
+// Generate content for all cells of a piece at once, enforcing at most one
+// of each type (monster, gold, sword, armor, potion) per piece.
 // ---------------------------------------------------------------------------
-export function generateCellContent(level, color) {
-  const r = Math.random();
-  if (r < 0.35) {
-    const monsterType = COLOR_MONSTER[color] || 'ghost';
-    return { type: 'monster', monsterType };
-  }
-  if (r < 0.60) {
-    const ttypes = ['gold', 'gold', 'gold', 'potion', 'sword', 'armor'];
-    const ttype = ttypes[Math.floor(Math.random() * ttypes.length)];
-    const value = ttype === 'gold' ? 5 + Math.floor(Math.random() * 16) : 0;
-    return { type: 'treasure', treasureType: ttype, value };
-  }
-  return null;
+function makeTreasure(ttype) {
+  return { type: 'treasure', treasureType: ttype,
+           value: ttype === 'gold' ? 5 + Math.floor(Math.random() * 16) : 0 };
+}
+
+export function generatePieceContents(level, color, count = 4) {
+  const used = new Set();
+  return Array.from({ length: count }, () => {
+    const r = Math.random();
+    if (r < 0.35 && !used.has('monster')) {
+      used.add('monster');
+      return { type: 'monster', monsterType: COLOR_MONSTER[color] || 'ghost' };
+    }
+    if (r < 0.60) {
+      // weighted pool filtered to unused types
+      const pool = ['gold', 'gold', 'gold', 'potion', 'sword', 'armor']
+        .filter(t => !used.has(t));
+      if (pool.length > 0) {
+        const ttype = pool[Math.floor(Math.random() * pool.length)];
+        used.add(ttype);
+        return makeTreasure(ttype);
+      }
+    }
+    return null;
+  });
+}
+
+// Like generatePieceContents but every cell is guaranteed to have content
+// (used for seed pieces). Shuffles all 5 possible types and takes `count`.
+export function generateForcedPieceContents(level, color, count = 4) {
+  const pool = [
+    { type: 'monster', monsterType: COLOR_MONSTER[color] || 'ghost' },
+    makeTreasure('gold'),
+    makeTreasure('potion'),
+    makeTreasure('sword'),
+    makeTreasure('armor'),
+  ];
+  pool.sort(() => Math.random() - 0.5);
+  return pool.slice(0, count);
 }
 
 // ---------------------------------------------------------------------------
