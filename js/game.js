@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=13';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=13';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=13';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=13';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=13';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=14';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=14';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=14';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=14';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=14';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -14,8 +14,12 @@ let pendingSteps = [];   // step queue for frame-by-frame turn animation
 
 // Drag state for canvas touch movement
 let dragActive    = false;
+let dragMoved     = false;   // true once the finger moves beyond the tap threshold
 let dragOffsetRow = 0;
 let dragOffsetCol = 0;
+let dragStartX    = 0;
+let dragStartY    = 0;
+const DRAG_THRESHOLD = 8; // pixels of movement before a touch counts as a drag
 
 function newGameState() {
   return {
@@ -381,9 +385,13 @@ function onCanvasTouchStart(e) {
   const piece = gameState.activePiece;
   if (!piece) return;
   e.preventDefault();
-  const pos = screenToGrid(e.touches[0].clientX, e.touches[0].clientY);
+  const t   = e.touches[0];
+  const pos = screenToGrid(t.clientX, t.clientY);
   if (!pos) return;
   dragActive    = true;
+  dragMoved     = false;
+  dragStartX    = t.clientX;
+  dragStartY    = t.clientY;
   dragOffsetRow = pos.row - piece.row;
   dragOffsetCol = pos.col - piece.col;
 }
@@ -391,7 +399,15 @@ function onCanvasTouchStart(e) {
 function onCanvasTouchMove(e) {
   if (!dragActive || gameState?.phase !== 'PLACING') return;
   e.preventDefault();
-  const pos = screenToGrid(e.touches[0].clientX, e.touches[0].clientY);
+  const t = e.touches[0];
+  // Only start moving the piece once the finger has travelled past the threshold
+  if (!dragMoved) {
+    const dx = t.clientX - dragStartX;
+    const dy = t.clientY - dragStartY;
+    if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    dragMoved = true;
+  }
+  const pos = screenToGrid(t.clientX, t.clientY);
   if (!pos) return;
   const piece    = gameState.activePiece;
   const newPiece = { ...piece, row: pos.row - dragOffsetRow, col: pos.col - dragOffsetCol };
@@ -399,7 +415,10 @@ function onCanvasTouchMove(e) {
 }
 
 function onCanvasTouchEnd() {
+  // Short tap (no significant movement) → rotate clockwise
+  if (dragActive && !dragMoved) handleAction('rotateCW');
   dragActive = false;
+  dragMoved  = false;
 }
 
 // ---------------------------------------------------------------------------
