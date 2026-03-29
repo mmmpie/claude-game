@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=10';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=10';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=10';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=10';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=10';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=11';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=11';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=11';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=11';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=11';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -60,6 +60,9 @@ function initLevel(state, levelNum) {
   grid.stairs = stairsPos;
   placeEntity(grid, stairsPos.row, stairsPos.col, 'stairs', stairsPos);
 
+  // Seed the playfield with one pre-placed tetromino full of content
+  placeSeedPiece(state, grid);
+
   // First piece spawns near the adventurer (piece origin = adv position offset by -1)
   state.activePiece = clampPiece({ ...makePiece(state), row: advRow - 1, col: advCol - 1 });
   state.nextPiece   = makePiece(state);
@@ -75,6 +78,35 @@ function pickStairsCorner() {
     { row: ROWS - 1, col: COLS - 1 },
   ];
   return corners[Math.floor(Math.random() * corners.length)];
+}
+
+// ---------------------------------------------------------------------------
+// Seed piece — one pre-placed tetromino with forced content on every cell
+// ---------------------------------------------------------------------------
+function placeSeedPiece(state, grid) {
+  const type  = randomType();
+  const color = randomColor();
+  // Every cell must contain a monster or treasure — retry until non-null
+  const cellContents = Array.from({ length: 4 }, () => {
+    let c;
+    do { c = generateCellContent(state.level); } while (!c);
+    return c;
+  });
+
+  // Try random positions; try all rotations at each — grid is nearly empty
+  // so a valid placement is found quickly
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const row = Math.floor(Math.random() * ROWS);
+    const col = Math.floor(Math.random() * COLS);
+    let piece = { type, color, rotationIndex: 0, row, col, cellContents };
+    for (let r = 0; r < 4; r++) {
+      if (isValidPlacement(piece, grid)) {
+        lockPiece(piece, grid);
+        return;
+      }
+      piece = rotatePiece(piece, 1);
+    }
+  }
 }
 
 function removeEntitySafe(grid, entity) {
