@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=11';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=11';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=11';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=11';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=11';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=12';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generateCellContent } from './grid.js?v=12';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=12';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=12';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=12';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -60,8 +60,9 @@ function initLevel(state, levelNum) {
   grid.stairs = stairsPos;
   placeEntity(grid, stairsPos.row, stairsPos.col, 'stairs', stairsPos);
 
-  // Seed the playfield with one pre-placed tetromino full of content
-  placeSeedPiece(state, grid);
+  // Seed the playfield — more pieces each level (capped at 6)
+  const seedCount = Math.min(levelNum, 6);
+  for (let i = 0; i < seedCount; i++) placeSeedPiece(state, grid);
 
   // First piece spawns near the adventurer (piece origin = adv position offset by -1)
   state.activePiece = clampPiece({ ...makePiece(state), row: advRow - 1, col: advCol - 1 });

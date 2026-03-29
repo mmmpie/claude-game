@@ -1,4 +1,4 @@
-import { isPassable } from './grid.js?v=11';
+import { isPassable } from './grid.js?v=12';
 
 const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
 

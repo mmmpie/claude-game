@@ -1,6 +1,6 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=11';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=11';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=11';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=12';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=12';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=12';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -98,7 +98,7 @@ export function runAdventurerTurn(adv, grid, gameState) {
 }
 
 function computeNextStep(adv, grid, gameState) {
-  // Priority 1: adjacent treasure (only if not blocked by a wall)
+  // Always grab adjacent treasure for free (it's literally in our path)
   for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
     const nr = adv.row + dr, nc = adv.col + dc;
     const cell = getCell(grid, nr, nc);
@@ -108,39 +108,34 @@ function computeNextStep(adv, grid, gameState) {
     }
   }
 
-  // Gather all visible treasures and stairs as targets
+  // Primary goal: stairs (head there directly if a path exists)
+  if (grid.stairs) {
+    const stairPath = bfs(grid, adv, grid.stairs, { forEntity: 'adventurer' });
+    if (stairPath && stairPath.length > 0) {
+      adv.currentGoal = { row: grid.stairs.row, col: grid.stairs.col };
+      return stairPath[0];
+    }
+  }
+
+  // Stairs unreachable — fall back to nearest treasure or killable monster
   const targets = [];
   for (const t of grid.treasures) {
-    if (!t.collected) targets.push({ row: t.row, col: t.col, priority: 2 });
+    if (!t.collected) targets.push({ row: t.row, col: t.col });
   }
-  if (grid.stairs) targets.push({ row: grid.stairs.row, col: grid.stairs.col, priority: 3 });
-
-  // Killable monsters (adventurer can kill them before they kill us)
   for (const m of grid.monsters) {
     if (!m.alive) continue;
-    const dmgToM = Math.max(1, adventurerAttack(adv) - m.defense);
+    const dmgToM   = Math.max(1, adventurerAttack(adv)  - m.defense);
     const dmgToAdv = Math.max(1, m.attack - adventurerDefense(adv));
-    const turnsToKillM = Math.ceil(m.hp / dmgToM);
-    const turnsToKillAdv = Math.ceil(adv.hp / dmgToAdv);
-    if (turnsToKillM < turnsToKillAdv) {
-      targets.push({ row: m.row, col: m.col, priority: 1.5 });
+    if (Math.ceil(m.hp / dmgToM) < Math.ceil(adv.hp / dmgToAdv)) {
+      targets.push({ row: m.row, col: m.col });
     }
   }
 
   if (targets.length === 0) { adv.currentGoal = null; return null; }
 
   const result = findNearest(grid, adv, targets, { forEntity: 'adventurer' });
-  if (!result || result.path.length === 0) {
-    if (grid.stairs) {
-      const stairPath = bfs(grid, adv, grid.stairs, { forEntity: 'adventurer' });
-      if (stairPath && stairPath.length > 0) {
-        adv.currentGoal = { row: grid.stairs.row, col: grid.stairs.col };
-        return stairPath[0];
-      }
-    }
-    adv.currentGoal = null;
-    return null;
-  }
+  if (!result || result.path.length === 0) { adv.currentGoal = null; return null; }
+
   adv.currentGoal = { row: result.target.row, col: result.target.col };
   return result.path[0];
 }
