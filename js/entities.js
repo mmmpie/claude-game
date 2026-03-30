@@ -1,6 +1,6 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=21';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=21';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=21';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=22';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=22';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=22';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -125,13 +125,23 @@ function computeNextStep(adv, grid, gameState) {
     }
   }
 
-  if (targets.length === 0) { adv.currentGoal = null; return null; }
+  if (targets.length === 0) { adv.currentGoal = null; return randomStep(adv, grid); }
 
   const result = findNearest(grid, adv, targets, { forEntity: 'adventurer' });
-  if (!result || result.path.length === 0) { adv.currentGoal = null; return null; }
+  if (!result || result.path.length === 0) { adv.currentGoal = null; return randomStep(adv, grid); }
 
   adv.currentGoal = { row: result.target.row, col: result.target.col };
   return result.path[0];
+}
+
+function randomStep(entity, grid) {
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]].sort(() => Math.random() - 0.5);
+  for (const [dr, dc] of dirs) {
+    const nr = entity.row + dr, nc = entity.col + dc;
+    const cell = getCell(grid, nr, nc);
+    if (cell && !cell.locked && !cell.entity) return { row: nr, col: nc };
+  }
+  return null;
 }
 
 function hasPassableNeighbor(adv, grid) {
