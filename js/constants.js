@@ -89,6 +89,7 @@ export const FA_ICONS = {
   sword:      '\uf0e3',  // fa-gavel
   armor:      '\uf132',  // fa-shield
   potion:     '\uf0c3',  // fa-flask
+  rock:       '\uf6fc',  // fa-mountain
 };
 
 // Each piece colour spawns a specific monster type
@@ -109,6 +110,9 @@ export const MONSTER_STATS = {
 
 // Adventurer base stats
 export const ADVENTURER_BASE = { hp: 30, maxHp: 30, attack: 3, defense: 1 };
+
+// Rock — an impassable obstacle revealed when clusters clear
+export const ROCK = { glyph: FA_ICONS.rock, color: '#7F8C8D', description: 'Rock' };
 
 // Treasure types — sword/armor each give +1 to ATK/DEF, stackable
 export const TREASURE_TYPES = {

@@ -1,7 +1,7 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=23';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=23';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=23';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=23';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=24';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=24';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=24';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=24';
 
 // ---------------------------------------------------------------------------
 // Adventurer

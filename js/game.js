@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=23';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=23';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=23';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=23';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=23';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=24';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=24';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=24';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=24';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=24';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -277,6 +277,13 @@ function spawnRevealedEntities(grid, events) {
       grid.monsters.push(monster);
       placeEntity(grid, row, col, 'monster', monster);
       logEvent(gameState, `A ${descriptor.monsterType} appears!`);
+      continue;
+    }
+
+    if (type === 'rock') {
+      const cell = getCell(grid, row, col);
+      if (!cell || cell.entity) continue;
+      placeEntity(grid, row, col, 'rock', { row, col });
       continue;
     }
 

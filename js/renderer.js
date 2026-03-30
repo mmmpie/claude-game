@@ -1,5 +1,5 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=23';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=23';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=24';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=24';
 
 // ---------------------------------------------------------------------------
 // Renderer state
@@ -194,6 +194,9 @@ function drawContentGlyph(ctx, cx, cy, cellSize, content, alpha) {
     const ttype = TREASURE_TYPES[content.treasureType];
     ctx.fillStyle = ttype.color;
     ctx.fillText(ttype.glyph, cx, cy);
+  } else if (content.type === 'rock') {
+    ctx.fillStyle = ROCK.color;
+    ctx.fillText(FA_ICONS.rock, cx, cy);
   } else if (content.type === 'stairs') {
     ctx.fillStyle = '#F1C40F';
     ctx.fillText(FA_ICONS.stairs, cx, cy);
@@ -240,6 +243,7 @@ function drawEntities(ctx, renderer, grid, adventurer) {
         case 'monster':    drawMonster(ctx, x, y, cellSize, fontSize, cell.entityRef); break;
         case 'treasure':   drawTreasure(ctx, x, y, fontSize, cell.entityRef); break;
         case 'stairs':     drawStairs(ctx, x, y, fontSize); break;
+        case 'rock':       drawRock(ctx, x, y, fontSize); break;
       }
     }
   }
@@ -294,6 +298,14 @@ function drawStairs(ctx, x, y, fontSize) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(FA_ICONS.stairs, x, y);
+}
+
+function drawRock(ctx, x, y, fontSize) {
+  ctx.fillStyle = ROCK.color;
+  ctx.font = faFont(fontSize);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(FA_ICONS.rock, x, y);
 }
 
 // ---------------------------------------------------------------------------

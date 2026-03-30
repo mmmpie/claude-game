@@ -1,4 +1,4 @@
-import { COLS, ROWS, CLUSTER_MIN_SIZE, COLOR_MONSTER } from './constants.js?v=23';
+import { COLS, ROWS, CLUSTER_MIN_SIZE, COLOR_MONSTER } from './constants.js?v=24';
 
 // ---------------------------------------------------------------------------
 // Cell factory
@@ -63,6 +63,10 @@ export function generatePieceContents(level, color, count = 4) {
     if (r < 0.35 && !used.has('monster')) {
       used.add('monster');
       return { type: 'monster', monsterType: COLOR_MONSTER[color] || 'ghost' };
+    }
+    if (r < 0.40 && !used.has('rock')) {   // 5% chance — rare obstacle
+      used.add('rock');
+      return { type: 'rock' };
     }
     if (r < 0.60) {
       // weighted pool filtered to unused types
@@ -161,6 +165,7 @@ export function isPassable(grid, row, col, forEntity) {
   if (row < 0 || row >= grid.rows || col < 0 || col >= grid.cols) return false;
   const cell = grid.cells[row][col];
   if (cell.locked) return false;
+  if (cell.entity === 'rock') return false;
   if (cell.entity === 'monster') return false;
   // Monsters cannot enter cells occupied by the adventurer, treasure, or stairs
   if (forEntity === 'monster' && cell.entity) return false;
