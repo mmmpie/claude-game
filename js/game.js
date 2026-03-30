@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=25';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=25';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=25';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=25';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=25';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=26';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=26';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=26';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=26';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=26';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -213,15 +213,18 @@ function placePiece() {
   const { activePiece, grid } = gameState;
   if (!isValidPlacement(activePiece, grid)) return;
 
-  // Remember spawn position before we clear the active piece
+  // Remember spawn position and placed cells before locking
   const spawnRow = activePiece.row;
   const spawnCol = activePiece.col;
+  const placedKeys = new Set(getPieceCells(activePiece).map(c => c.row * 1000 + c.col));
 
   lockPiece(activePiece, grid);
   gameState.activePiece = null;   // hide ghost piece while animating
 
-  // Cluster detection + clearing
-  const clusters = findClusters(grid);
+  // Only clear clusters that include at least one cell from the just-placed piece,
+  // so pre-placed seed clusters don't vanish until the player touches them.
+  const clusters = findClusters(grid)
+    .filter(cluster => cluster.some(c => placedKeys.has(c.row * 1000 + c.col)));
   if (clusters.length > 0) {
     const allClearedCells = clusters.flat();
     const events = clearClusters(grid, clusters);
