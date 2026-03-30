@@ -1,6 +1,7 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=22';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=22';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=22';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=23';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=23';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=23';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=23';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -58,11 +59,12 @@ export function createTreasure(treasureType, value, row, col) {
 export function runAdventurerTurn(adv, grid, gameState) {
   if (!adv.alive) return { moved: false, trapped: false };
 
+  const blocked = activePieceBlocked(gameState);
   let movesLeft = ADVENTURER_MOVES;
   let moved = false;
 
   while (movesLeft > 0) {
-    const step = computeNextStep(adv, grid, gameState);
+    const step = computeNextStep(adv, grid, gameState, blocked);
     if (!step) break;
 
     // Check what's at the destination before moving
@@ -91,10 +93,11 @@ export function runAdventurerTurn(adv, grid, gameState) {
   return { moved, trapped };
 }
 
-function computeNextStep(adv, grid, gameState) {
+function computeNextStep(adv, grid, gameState, blocked) {
   // Always grab adjacent treasure for free (it's literally in our path)
   for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
     const nr = adv.row + dr, nc = adv.col + dc;
+    if (blocked.has(nr * 1000 + nc)) continue;
     const cell = getCell(grid, nr, nc);
     if (cell && !cell.locked && cell.entity === 'treasure') {
       adv.currentGoal = { row: nr, col: nc };
@@ -104,7 +107,7 @@ function computeNextStep(adv, grid, gameState) {
 
   // Primary goal: stairs (head there directly if a path exists)
   if (grid.stairs) {
-    const stairPath = bfs(grid, adv, grid.stairs, { forEntity: 'adventurer' });
+    const stairPath = bfs(grid, adv, grid.stairs, { forEntity: 'adventurer', blockedCells: blocked });
     if (stairPath && stairPath.length > 0) {
       adv.currentGoal = { row: grid.stairs.row, col: grid.stairs.col };
       return stairPath[0];
@@ -125,19 +128,28 @@ function computeNextStep(adv, grid, gameState) {
     }
   }
 
-  if (targets.length === 0) { adv.currentGoal = null; return randomStep(adv, grid); }
+  if (targets.length === 0) { adv.currentGoal = null; return randomStep(adv, grid, blocked); }
 
-  const result = findNearest(grid, adv, targets, { forEntity: 'adventurer' });
-  if (!result || result.path.length === 0) { adv.currentGoal = null; return randomStep(adv, grid); }
+  const result = findNearest(grid, adv, targets, { forEntity: 'adventurer', blockedCells: blocked });
+  if (!result || result.path.length === 0) { adv.currentGoal = null; return randomStep(adv, grid, blocked); }
 
   adv.currentGoal = { row: result.target.row, col: result.target.col };
   return result.path[0];
 }
 
-function randomStep(entity, grid) {
+// Returns a Set of row*1000+col keys for cells occupied by the active piece
+// when it sits in a legal position, otherwise an empty Set.
+function activePieceBlocked(gameState) {
+  const piece = gameState?.activePiece;
+  if (!piece || !isValidPlacement(piece, gameState.grid)) return new Set();
+  return new Set(getPieceCells(piece).map(({ row, col }) => row * 1000 + col));
+}
+
+function randomStep(entity, grid, blocked = new Set()) {
   const dirs = [[-1,0],[1,0],[0,-1],[0,1]].sort(() => Math.random() - 0.5);
   for (const [dr, dc] of dirs) {
     const nr = entity.row + dr, nc = entity.col + dc;
+    if (blocked.has(nr * 1000 + nc)) continue;
     const cell = getCell(grid, nr, nc);
     if (cell && !cell.locked && !cell.entity) return { row: nr, col: nc };
   }
@@ -200,19 +212,14 @@ export function runSingleMonsterTurn(monster, grid, gameState) {
   if (monster.justSpawned) { monster.justSpawned = false; return; }
   if (isAdjacentCoords(monster.row, monster.col, adv.row, adv.col)) return;
 
-  const path = bfs(grid, monster, adv, { forEntity: 'monster', adjacentGoal: true });
+  const blocked = activePieceBlocked(gameState);
+  const path = bfs(grid, monster, adv, { forEntity: 'monster', adjacentGoal: true, blockedCells: blocked });
   if (!path || path.length === 0) {
-    // Can't reach adventurer — move to a random passable neighbour instead
-    const dirs = [[-1,0],[1,0],[0,-1],[0,1]].sort(() => Math.random() - 0.5);
-    for (const [dr, dc] of dirs) {
-      const nr = monster.row + dr, nc = monster.col + dc;
-      const nc2 = getCell(grid, nr, nc);
-      if (nc2 && !nc2.locked && !nc2.entity) {
-        removeEntity(grid, monster.row, monster.col);
-        monster.row = nr; monster.col = nc;
-        placeEntity(grid, nr, nc, 'monster', monster);
-        break;
-      }
+    const step = randomStep(monster, grid, blocked);
+    if (step) {
+      removeEntity(grid, monster.row, monster.col);
+      monster.row = step.row; monster.col = step.col;
+      placeEntity(grid, monster.row, monster.col, 'monster', monster);
     }
     return;
   }

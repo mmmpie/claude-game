@@ -1,4 +1,4 @@
-import { isPassable } from './grid.js?v=22';
+import { isPassable } from './grid.js?v=23';
 
 const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
 
@@ -10,7 +10,7 @@ const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
 // or null if unreachable.
 // ---------------------------------------------------------------------------
 export function bfs(grid, start, goal, options = {}) {
-  const { forEntity = 'adventurer', adjacentGoal = false } = options;
+  const { forEntity = 'adventurer', adjacentGoal = false, blockedCells = null } = options;
   const key = (r, c) => r * 1000 + c;
   const startKey = key(start.row, start.col);
   const goalKey  = key(goal.row,  goal.col);
@@ -42,6 +42,7 @@ export function bfs(grid, start, goal, options = {}) {
 
       // Goal cell is always reachable regardless of passability
       const isGoal = (nr === goal.row && nc === goal.col);
+      if (!isGoal && blockedCells?.has(nKey)) continue;
       if (!isGoal && !isPassable(grid, nr, nc, forEntity)) continue;
 
       const entry = { row: nr, col: nc, parent: cur };
@@ -60,7 +61,7 @@ export function bfs(grid, start, goal, options = {}) {
 export function findNearest(grid, from, candidates, options = {}) {
   if (candidates.length === 0) return null;
 
-  const { forEntity = 'adventurer' } = options;
+  const { forEntity = 'adventurer', blockedCells = null } = options;
   const candidateSet = new Set(candidates.map(c => c.row * 1000 + c.col));
   const candidateMap = new Map(candidates.map(c => [c.row * 1000 + c.col, c]));
 
@@ -87,6 +88,7 @@ export function findNearest(grid, from, candidates, options = {}) {
       if (visited.has(nKey)) continue;
 
       const isCandidate = candidateSet.has(nKey);
+      if (!isCandidate && blockedCells?.has(nKey)) continue;
       if (!isCandidate && !isPassable(grid, nr, nc, forEntity)) continue;
 
       const entry = { row: nr, col: nc, parent: cur };
