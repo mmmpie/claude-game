@@ -1,5 +1,5 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=24';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=24';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=25';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=25';
 
 // ---------------------------------------------------------------------------
 // Renderer state
@@ -137,7 +137,7 @@ function drawLockedCells(ctx, renderer, grid) {
 
       // Content glyph — shown immediately (dimmed since entity not yet active)
       if (cell.content) {
-        drawContentGlyph(ctx, x + cellSize / 2, y + cellSize / 2, cellSize, cell.content, 0.65);
+        drawContentGlyph(ctx, x + cellSize / 2, y + cellSize / 2, cellSize, cell.content, 0.65, COLORS[cell.color]);
       }
     }
   }
@@ -170,15 +170,26 @@ function drawActivePiece(ctx, renderer, piece, grid) {
     // Show content glyph on the piece while it's being placed
     const content = piece.cellContents[i];
     if (content) {
-      drawContentGlyph(ctx, x + cellSize / 2, y + cellSize / 2, cellSize, content, 0.9);
+      drawContentGlyph(ctx, x + cellSize / 2, y + cellSize / 2, cellSize, content, 0.9, COLORS[piece.color]);
     }
   }
 }
 
 // ---------------------------------------------------------------------------
-// Draw a content glyph (monster/treasure/stairs) at a position
+// Blend a hex color toward white by `factor` (0 = unchanged, 1 = white)
 // ---------------------------------------------------------------------------
-function drawContentGlyph(ctx, cx, cy, cellSize, content, alpha) {
+function lightenColor(hex, factor) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgb(${Math.round(r + (255 - r) * factor)},${Math.round(g + (255 - g) * factor)},${Math.round(b + (255 - b) * factor)})`;
+}
+
+// ---------------------------------------------------------------------------
+// Draw a content glyph (monster/treasure/rock) embedded inside a piece cell.
+// pieceColorHex: hex color of the piece — glyph is rendered as a lightened tint.
+// ---------------------------------------------------------------------------
+function drawContentGlyph(ctx, cx, cy, cellSize, content, alpha, pieceColorHex) {
   const fontSize = Math.max(10, cellSize - 16);
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -186,20 +197,14 @@ function drawContentGlyph(ctx, cx, cy, cellSize, content, alpha) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
+  ctx.fillStyle = lightenColor(pieceColorHex, 0.45);
+
   if (content.type === 'monster') {
-    const stats = MONSTER_STATS[content.monsterType];
-    ctx.fillStyle = stats.color;
-    ctx.fillText(stats.glyph, cx, cy);
+    ctx.fillText(MONSTER_STATS[content.monsterType].glyph, cx, cy);
   } else if (content.type === 'treasure') {
-    const ttype = TREASURE_TYPES[content.treasureType];
-    ctx.fillStyle = ttype.color;
-    ctx.fillText(ttype.glyph, cx, cy);
+    ctx.fillText(TREASURE_TYPES[content.treasureType].glyph, cx, cy);
   } else if (content.type === 'rock') {
-    ctx.fillStyle = ROCK.color;
     ctx.fillText(FA_ICONS.rock, cx, cy);
-  } else if (content.type === 'stairs') {
-    ctx.fillStyle = '#F1C40F';
-    ctx.fillText(FA_ICONS.stairs, cx, cy);
   }
 
   ctx.restore();

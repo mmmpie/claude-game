@@ -102,24 +102,24 @@ export const COLOR_MONSTER = {
 
 // Monster stats — attack & defense are randomised per instance (0..level)
 export const MONSTER_STATS = {
-  dragon:    { hp: 8,  xpValue: 40, glyph: FA_ICONS.dragon,    color: '#E74C3C' },
-  ghost:     { hp: 3,  xpValue: 10, glyph: FA_ICONS.ghost,     color: '#5DADE2' },
-  spaghetti: { hp: 5,  xpValue: 20, glyph: FA_ICONS.spaghetti, color: '#2ECC71' },
-  skull:     { hp: 4,  xpValue: 15, glyph: FA_ICONS.skull,     color: '#F1C40F' },
+  dragon:    { hp: 8,  xpValue: 40, glyph: FA_ICONS.dragon,    color: '#E74C3C' }, // red piece
+  ghost:     { hp: 3,  xpValue: 10, glyph: FA_ICONS.ghost,     color: '#3498DB' }, // blue piece
+  spaghetti: { hp: 5,  xpValue: 20, glyph: FA_ICONS.spaghetti, color: '#2ECC71' }, // green piece
+  skull:     { hp: 4,  xpValue: 15, glyph: FA_ICONS.skull,     color: '#F1C40F' }, // yellow piece
 };
 
 // Adventurer base stats
 export const ADVENTURER_BASE = { hp: 30, maxHp: 30, attack: 3, defense: 1 };
 
 // Rock — an impassable obstacle revealed when clusters clear
-export const ROCK = { glyph: FA_ICONS.rock, color: '#7F8C8D', description: 'Rock' };
+export const ROCK = { glyph: FA_ICONS.rock, color: '#555555', description: 'Rock' };
 
 // Treasure types — sword/armor each give +1 to ATK/DEF, stackable
 export const TREASURE_TYPES = {
   gold:   { glyph: FA_ICONS.gold,   color: '#F1C40F', description: 'Gold' },
-  sword:  { glyph: FA_ICONS.sword,  color: '#ECF0F1', description: 'Sword (+1 ATK)', attackBonus: 1 },
-  armor:  { glyph: FA_ICONS.armor,  color: '#95A5A6', description: 'Shield (+1 DEF)', defenseBonus: 1 },
-  potion: { glyph: FA_ICONS.potion, color: '#E91E63', description: 'Potion (+10 HP)', hpRestore: 10 },
+  sword:  { glyph: FA_ICONS.sword,  color: '#BDC3C7', description: 'Sword (+1 ATK)', attackBonus: 1 },
+  armor:  { glyph: FA_ICONS.armor,  color: '#BDC3C7', description: 'Shield (+1 DEF)', defenseBonus: 1 },
+  potion: { glyph: FA_ICONS.potion, color: '#E74C3C', description: 'Potion (+10 HP)', hpRestore: 10 },
 };
 
 // Scoring
