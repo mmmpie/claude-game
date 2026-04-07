@@ -47,7 +47,7 @@ export function rotatePiece(piece, direction) {
 export function isValidPlacement(piece, grid) {
   const cells = getPieceCells(piece);
   for (const { row, col } of cells) {
-    if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return false;
+    if (row < 0 || row >= grid.rows || col < 0 || col >= grid.cols) return false;
     const cell = getCell(grid, row, col);
     if (!cell) return false;
     if (cell.locked) return false;
@@ -88,7 +88,9 @@ export function randomColor() {
 // ---------------------------------------------------------------------------
 // Clamp piece so all its cells remain within grid bounds
 // ---------------------------------------------------------------------------
-export function clampPiece(piece) {
+export function clampPiece(piece, grid = null) {
+  const gridRows = grid ? grid.rows : ROWS;
+  const gridCols = grid ? grid.cols : COLS;
   const cells = getPieceCells(piece);
   let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
   for (const { row, col } of cells) {
@@ -99,8 +101,8 @@ export function clampPiece(piece) {
   }
   let dr = 0, dc = 0;
   if (minR < 0) dr = -minR;
-  if (maxR >= ROWS) dr = ROWS - 1 - maxR;
+  if (maxR >= gridRows) dr = gridRows - 1 - maxR;
   if (minC < 0) dc = -minC;
-  if (maxC >= COLS) dc = COLS - 1 - maxC;
+  if (maxC >= gridCols) dc = gridCols - 1 - maxC;
   return movePiece(piece, dr, dc);
 }

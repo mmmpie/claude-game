@@ -16,17 +16,17 @@ function makeCell() {
 // ---------------------------------------------------------------------------
 // Grid factory
 // ---------------------------------------------------------------------------
-export function createGrid() {
+export function createGrid(rows = ROWS, cols = COLS) {
   const cells = [];
-  for (let r = 0; r < ROWS; r++) {
+  for (let r = 0; r < rows; r++) {
     cells.push([]);
-    for (let c = 0; c < COLS; c++) {
+    for (let c = 0; c < cols; c++) {
       cells[r].push(makeCell());
     }
   }
   return {
-    cols: COLS,
-    rows: ROWS,
+    cols,
+    rows,
     cells,
     monsters: [],
     treasures: [],

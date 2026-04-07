@@ -1,5 +1,5 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=31';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=31';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=32';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=32';
 
 // ---------------------------------------------------------------------------
 // Renderer state
@@ -15,6 +15,8 @@ export function createRenderer(canvas) {
     offsetX: 0,
     offsetY: 0,
     hudX: 0,
+    rows: ROWS,
+    cols: COLS,
     flashCells: new Map(),
   };
 }
@@ -29,20 +31,22 @@ function faFont(size) {
 // ---------------------------------------------------------------------------
 // Resize / recalculate layout
 // ---------------------------------------------------------------------------
-export function layoutRenderer(renderer, portrait) {
+export function layoutRenderer(renderer, portrait, rows = renderer.rows, cols = renderer.cols) {
+  renderer.rows = rows;
+  renderer.cols = cols;
   const canvas = renderer.canvas;
   if (portrait) {
     const w = Math.min(window.innerWidth, 520);
-    renderer.cellSize = Math.floor(w / COLS);
-    canvas.width  = renderer.cellSize * COLS;
-    canvas.height = renderer.cellSize * ROWS;
+    renderer.cellSize = Math.floor(w / cols);
+    canvas.width  = renderer.cellSize * cols;
+    canvas.height = renderer.cellSize * rows;
     renderer.offsetX = 0;
     renderer.offsetY = 0;
     renderer.hudX = null;
   } else {
-    renderer.cellSize = 50;
-    const gridW = renderer.cellSize * COLS;
-    const gridH = renderer.cellSize * ROWS;
+    renderer.cellSize = Math.min(50, Math.floor(window.innerHeight * 0.9 / rows));
+    const gridW = renderer.cellSize * cols;
+    const gridH = renderer.cellSize * rows;
     canvas.width  = gridW + 200;
     canvas.height = Math.max(gridH, 500);
     renderer.offsetX = 0;
@@ -88,22 +92,22 @@ export function render(renderer, gameState) {
 // Background and grid lines
 // ---------------------------------------------------------------------------
 function drawBackground(ctx, renderer) {
-  const { cellSize, offsetX, offsetY, canvas } = renderer;
-  const gridW = cellSize * COLS;
-  const gridH = cellSize * ROWS;
+  const { cellSize, offsetX, offsetY, canvas, rows, cols } = renderer;
+  const gridW = cellSize * cols;
+  const gridH = cellSize * rows;
 
   ctx.fillStyle = '#1a1a2e';
   ctx.fillRect(offsetX, offsetY, gridW, gridH);
 
   ctx.strokeStyle = '#2a2a4e';
   ctx.lineWidth = 0.5;
-  for (let r = 0; r <= ROWS; r++) {
+  for (let r = 0; r <= rows; r++) {
     ctx.beginPath();
     ctx.moveTo(offsetX, offsetY + r * cellSize);
     ctx.lineTo(offsetX + gridW, offsetY + r * cellSize);
     ctx.stroke();
   }
-  for (let c = 0; c <= COLS; c++) {
+  for (let c = 0; c <= cols; c++) {
     ctx.beginPath();
     ctx.moveTo(offsetX + c * cellSize, offsetY);
     ctx.lineTo(offsetX + c * cellSize, offsetY + gridH);
@@ -121,8 +125,8 @@ function drawBackground(ctx, renderer) {
 // ---------------------------------------------------------------------------
 function drawLockedCells(ctx, renderer, grid) {
   const { cellSize, offsetX, offsetY } = renderer;
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
+  for (let r = 0; r < grid.rows; r++) {
+    for (let c = 0; c < grid.cols; c++) {
       const cell = grid.cells[r][c];
       if (!cell.locked) continue;
 
@@ -161,7 +165,7 @@ function drawActivePiece(ctx, renderer, piece, grid) {
 
   for (let i = 0; i < cells.length; i++) {
     const { row, col } = cells[i];
-    if (row < 0 || row >= ROWS || col < 0 || col >= COLS) continue;
+    if (row < 0 || row >= grid.rows || col < 0 || col >= grid.cols) continue;
     const x = offsetX + col * cellSize;
     const y = offsetY + row * cellSize;
 
@@ -241,8 +245,8 @@ function drawGoalHighlight(ctx, renderer, adventurer) {
 function drawEntities(ctx, renderer, grid, adventurer) {
   const { cellSize, offsetX, offsetY } = renderer;
 
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
+  for (let r = 0; r < grid.rows; r++) {
+    for (let c = 0; c < grid.cols; c++) {
       const cell = grid.cells[r][c];
       if (!cell.entity) continue;
 

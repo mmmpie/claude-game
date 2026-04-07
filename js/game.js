@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE, COLOR_NAMES } from './constants.js?v=30';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=30';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=30';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=30';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=30';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE, COLOR_NAMES } from './constants.js?v=32';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=32';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=32';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=32';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=32';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -40,18 +40,36 @@ function newGameState() {
 // ---------------------------------------------------------------------------
 // Level initialization
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Compute grid dimensions: grows until there is room for all seed pieces
+// while keeping a clearance zone around the adventurer centre.
+// ---------------------------------------------------------------------------
+const SEED_CLEARANCE = 3; // min Manhattan distance from adv centre to any seed cell
+
+function computeGridDims(seedCount) {
+  // Cells needed: 4 per piece + clearance diamond (r=SEED_CLEARANCE) + buffer
+  const clearanceCells = 2 * SEED_CLEARANCE * (SEED_CLEARANCE + 1) + 1;
+  const needed = seedCount * 4 + clearanceCells + 30;
+  let size = ROWS; // never shrink below the base size
+  while (size * size < needed) size++;
+  return { rows: size, cols: size };
+}
+
 function initLevel(state, levelNum) {
   state.level = levelNum;
   state.phase = 'PLACING';
   state.turnCount = 0;
   lastAutoTick = Infinity; // wait for first piece placement each level
 
-  const grid = createGrid();
+  const seedCount = levelNum + 2;
+  const { rows, cols } = computeGridDims(seedCount);
+
+  const grid = createGrid(rows, cols);
   state.grid = grid;
 
-  // Spawn adventurer at center of playfield
-  const advRow = Math.floor(ROWS / 2);
-  const advCol = Math.floor(COLS / 2);
+  // Spawn adventurer at centre of playfield
+  const advRow = Math.floor(rows / 2);
+  const advCol = Math.floor(cols / 2);
   const adv = levelNum === 1
     ? createAdventurer(advRow, advCol)
     : state.adventurer;
@@ -67,32 +85,34 @@ function initLevel(state, levelNum) {
   grid.treasures = [];
   grid.stairs = null;
 
-  // Place stairs in a random corner
-  const stairsPos = pickStairsCorner();
+  const stairsPos = pickStairsCorner(rows, cols);
   grid.stairs = stairsPos;
   placeEntity(grid, stairsPos.row, stairsPos.col, 'stairs', stairsPos);
 
-  // Seed the playfield — pieces fill outward from the stairs, each a different color.
-  // More pieces each level (capped at 6).
-  const seedCount = Math.min(levelNum, 6);
-  const seedCandidates = buildStairsCandidates(stairsPos);
+  // Seed pieces fill from stairs corner, each a distinct colour, respecting
+  // the clearance zone so the adventurer always has room to place pieces.
+  const seedCandidates = buildStairsCandidates(stairsPos, grid);
   for (let i = 0; i < seedCount; i++) {
-    placeSeedPiece(state, grid, COLOR_NAMES[i % COLOR_NAMES.length], seedCandidates);
+    placeSeedPiece(state, grid, COLOR_NAMES[i % COLOR_NAMES.length], seedCandidates, adv);
   }
 
-  // First piece spawns near the adventurer (piece origin = adv position offset by -1)
-  state.activePiece = clampPiece({ ...makePiece(state), row: advRow - 1, col: advCol - 1 });
-  state.nextPiece   = makePiece(state);
+  // Resize canvas for the new grid dimensions
+  layoutRenderer(renderer, portrait, rows, cols);
+
+  // First piece spawns near the adventurer
+  state.activePiece = clampPiece(
+    { ...makePiece(state), row: advRow - 1, col: advCol - 1 }, grid);
+  state.nextPiece = makePiece(state);
 
   logEvent(state, `=== Level ${levelNum} ===`);
 }
 
-function pickStairsCorner() {
+function pickStairsCorner(rows, cols) {
   const corners = [
     { row: 0,        col: 0        },
-    { row: 0,        col: COLS - 1 },
-    { row: ROWS - 1, col: 0        },
-    { row: ROWS - 1, col: COLS - 1 },
+    { row: 0,        col: cols - 1 },
+    { row: rows - 1, col: 0        },
+    { row: rows - 1, col: cols - 1 },
   ];
   return corners[Math.floor(Math.random() * corners.length)];
 }
@@ -101,10 +121,10 @@ function pickStairsCorner() {
 // Build candidate positions sorted by Manhattan distance from the stairs,
 // so seed pieces fill inward from the stairs corner first.
 // ---------------------------------------------------------------------------
-function buildStairsCandidates(stairsPos) {
+function buildStairsCandidates(stairsPos, grid) {
   const candidates = [];
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
+  for (let r = 0; r < grid.rows; r++) {
+    for (let c = 0; c < grid.cols; c++) {
       candidates.push({ row: r, col: c,
         dist: Math.abs(r - stairsPos.row) + Math.abs(c - stairsPos.col) });
     }
@@ -114,9 +134,10 @@ function buildStairsCandidates(stairsPos) {
 }
 
 // ---------------------------------------------------------------------------
-// Seed piece — placed as close to the stairs as possible using the given color.
+// Seed piece — placed as close to the stairs as possible, never within
+// SEED_CLEARANCE Manhattan distance of the adventurer.
 // ---------------------------------------------------------------------------
-function placeSeedPiece(state, grid, color, candidates) {
+function placeSeedPiece(state, grid, color, candidates, adv) {
   const type         = randomType();
   const cellContents = generateForcedPieceContents(state.level, color);
 
@@ -124,8 +145,11 @@ function placeSeedPiece(state, grid, color, candidates) {
     let piece = { type, color, rotationIndex: 0, row, col, cellContents };
     for (let r = 0; r < 4; r++) {
       if (isValidPlacement(piece, grid)) {
-        lockPiece(piece, grid);
-        return;
+        const pieceCells = getPieceCells(piece);
+        const tooClose = pieceCells.some(
+          c => Math.abs(c.row - adv.row) + Math.abs(c.col - adv.col) <= SEED_CLEARANCE
+        );
+        if (!tooClose) { lockPiece(piece, grid); return; }
       }
       piece = rotatePiece(piece, 1);
     }
@@ -183,7 +207,7 @@ function handleAction(action) {
     default: return;
   }
 
-  gameState.activePiece = clampPiece(newPiece);
+  gameState.activePiece = clampPiece(newPiece, gameState.grid);
 }
 
 // ---------------------------------------------------------------------------
@@ -260,7 +284,7 @@ function placePiece() {
 
   queueEntityMoves(() => {
     gameState.activePiece = clampPiece(
-      { ...gameState.nextPiece, row: spawnRow, col: spawnCol }
+      { ...gameState.nextPiece, row: spawnRow, col: spawnCol }, grid
     );
     gameState.nextPiece = makePiece(gameState);
 
@@ -342,8 +366,8 @@ function checkWin() {
 // Check if the active piece has any valid placement on the grid
 // ---------------------------------------------------------------------------
 function anyValidPlacement(grid, piece) {
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
+  for (let r = 0; r < grid.rows; r++) {
+    for (let c = 0; c < grid.cols; c++) {
       const testPiece = { ...piece, row: r, col: c };
       if (isValidPlacement(testPiece, grid)) return true;
     }
@@ -380,7 +404,7 @@ function wireMouse() {
     const cells = getPieceCells(piece);
     const minDr = Math.min(...cells.map(c => c.row - piece.row));
     const minDc = Math.min(...cells.map(c => c.col - piece.col));
-    gameState.activePiece = clampPiece({ ...piece, row: row - minDr, col: col - minDc });
+    gameState.activePiece = clampPiece({ ...piece, row: row - minDr, col: col - minDc }, gameState.grid);
   });
 
   canvas.addEventListener('mousedown', e => {
@@ -484,7 +508,7 @@ function onCanvasTouchMove(e) {
   if (!pos) return;
   const piece    = gameState.activePiece;
   const newPiece = { ...piece, row: pos.row - dragOffsetRow, col: pos.col - dragOffsetCol };
-  gameState.activePiece = clampPiece(newPiece);
+  gameState.activePiece = clampPiece(newPiece, gameState.grid);
 }
 
 function onCanvasTouchEnd() {
@@ -505,7 +529,8 @@ function applyLayout() {
   if (container) container.classList.toggle('portrait', portrait);
   if (btnPanel)  btnPanel.style.display  = portrait ? 'flex' : 'none';
   if (hudTop)    hudTop.style.display    = portrait ? 'flex' : 'none';
-  layoutRenderer(renderer, portrait);
+  layoutRenderer(renderer, portrait,
+    gameState?.grid?.rows ?? ROWS, gameState?.grid?.cols ?? COLS);
 }
 
 // ---------------------------------------------------------------------------
