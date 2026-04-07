@@ -167,8 +167,9 @@ export function isPassable(grid, row, col, forEntity) {
   if (cell.locked) return false;
   if (cell.entity === 'rock') return false;
   if (cell.entity === 'monster') return false;
-  // Monsters cannot enter cells occupied by the adventurer, treasure, or stairs
-  if (forEntity === 'monster' && cell.entity) return false;
+  // Monsters cannot enter cells occupied by the adventurer, stairs, or other monsters;
+  // but they CAN walk through treasure cells (collecting them as they pass).
+  if (forEntity === 'monster' && cell.entity && cell.entity !== 'treasure') return false;
   return true;
 }
 

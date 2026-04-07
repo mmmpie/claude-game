@@ -37,6 +37,7 @@ export function createMonster(monsterType, row, col, level = 1) {
     defense: Math.floor(Math.random() * (level + 1)),
     xpValue: stats.xpValue,
     alive: true,
+    inventory: [],  // items looted while roaming; dropped on death
   };
 }
 
@@ -145,13 +146,15 @@ function activePieceBlocked(gameState) {
   return new Set(getPieceCells(piece).map(({ row, col }) => row * 1000 + col));
 }
 
-function randomStep(entity, grid, blocked = new Set()) {
+function randomStep(entity, grid, blocked = new Set(), canStepOnTreasure = false) {
   const dirs = [[-1,0],[1,0],[0,-1],[0,1]].sort(() => Math.random() - 0.5);
   for (const [dr, dc] of dirs) {
     const nr = entity.row + dr, nc = entity.col + dc;
     if (blocked.has(nr * 1000 + nc)) continue;
     const cell = getCell(grid, nr, nc);
-    if (cell && !cell.locked && !cell.entity) return { row: nr, col: nc };
+    if (!cell || cell.locked) continue;
+    if (!cell.entity) return { row: nr, col: nc };
+    if (canStepOnTreasure && cell.entity === 'treasure') return { row: nr, col: nc };
   }
   return null;
 }
@@ -204,6 +207,68 @@ export function collectTreasure(adv, treasure, grid, gameState) {
 }
 
 // ---------------------------------------------------------------------------
+// Monster loot — collect and drop
+// ---------------------------------------------------------------------------
+
+// Called when a monster steps onto a treasure cell.
+// Swords and armor buff the monster; potions heal it (consumed, not dropped);
+// gold is simply carried and dropped on death.
+function monsterCollectTreasure(monster, treasure, grid, gameState) {
+  if (!treasure || treasure.collected) return;
+  treasure.collected = true;
+  // The monster has already moved onto the cell, so the entity slot is now
+  // 'monster' — the treasure reference is gone from the grid already.
+
+  switch (treasure.type) {
+    case 'sword':
+      monster.attack += TREASURE_TYPES.sword.attackBonus;
+      logEvent(gameState, `${capitalize(monster.type)} grabbed a Sword! (ATK↑)`);
+      monster.inventory.push({ type: 'sword', value: 0 });
+      break;
+    case 'armor':
+      monster.defense += TREASURE_TYPES.armor.defenseBonus;
+      logEvent(gameState, `${capitalize(monster.type)} grabbed a Shield! (DEF↑)`);
+      monster.inventory.push({ type: 'armor', value: 0 });
+      break;
+    case 'potion':
+      monster.hp = Math.min(monster.maxHp, monster.hp + TREASURE_TYPES.potion.hpRestore);
+      logEvent(gameState, `${capitalize(monster.type)} drank a Potion! (HP restored)`);
+      // Potions are consumed — nothing to drop.
+      break;
+    case 'gold':
+      logEvent(gameState, `${capitalize(monster.type)} grabbed ${treasure.value} gold!`);
+      monster.inventory.push({ type: 'gold', value: treasure.value });
+      break;
+  }
+}
+
+// Drops everything in the monster's inventory into the nearest free cells.
+function monsterDropInventory(monster, grid, gameState) {
+  if (!monster.inventory || monster.inventory.length === 0) return;
+
+  // The monster's cell was just cleared by removeEntity; try it first, then neighbours.
+  const candidates = [
+    { row: monster.row,     col: monster.col     },
+    { row: monster.row - 1, col: monster.col     },
+    { row: monster.row + 1, col: monster.col     },
+    { row: monster.row,     col: monster.col - 1 },
+    { row: monster.row,     col: monster.col + 1 },
+  ];
+
+  for (const item of monster.inventory) {
+    for (const { row, col } of candidates) {
+      const cell = getCell(grid, row, col);
+      if (!cell || cell.locked || cell.entity) continue;
+      const t = createTreasure(item.type, item.value, row, col);
+      grid.treasures.push(t);
+      placeEntity(grid, row, col, 'treasure', t);
+      logEvent(gameState, `${capitalize(monster.type)} dropped ${TREASURE_TYPES[item.type].description}!`);
+      break;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Monster AI — single monster (called per-frame for step-based animation)
 // ---------------------------------------------------------------------------
 export function runSingleMonsterTurn(monster, grid, gameState) {
@@ -215,23 +280,28 @@ export function runSingleMonsterTurn(monster, grid, gameState) {
   const blocked = activePieceBlocked(gameState);
   const path = bfs(grid, monster, adv, { forEntity: 'monster', adjacentGoal: true, blockedCells: blocked });
   if (!path || path.length === 0) {
-    const step = randomStep(monster, grid, blocked);
+    const step = randomStep(monster, grid, blocked, true);
     if (step) {
+      const destCell = getCell(grid, step.row, step.col);
+      const loot = destCell?.entity === 'treasure' ? destCell.entityRef : null;
       removeEntity(grid, monster.row, monster.col);
       monster.row = step.row; monster.col = step.col;
       placeEntity(grid, monster.row, monster.col, 'monster', monster);
+      if (loot) monsterCollectTreasure(monster, loot, grid, gameState);
     }
     return;
   }
 
   const step = path[0];
-  const cell = getCell(grid, step.row, step.col);
-  if (!cell || cell.locked || cell.entity) return;
+  const destCell = getCell(grid, step.row, step.col);
+  if (!destCell || destCell.locked || (destCell.entity && destCell.entity !== 'treasure')) return;
 
+  const loot = destCell.entity === 'treasure' ? destCell.entityRef : null;
   removeEntity(grid, monster.row, monster.col);
   monster.row = step.row;
   monster.col = step.col;
   placeEntity(grid, monster.row, monster.col, 'monster', monster);
+  if (loot) monsterCollectTreasure(monster, loot, grid, gameState);
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +332,7 @@ export function resolveCombat(grid, gameState) {
     if (monster.hp <= 0) {
       monster.alive = false;
       removeEntity(grid, monster.row, monster.col);
+      monsterDropInventory(monster, grid, gameState);
       gameState.score += monster.xpValue;
       logEvent(gameState, `${capitalize(monster.type)} defeated! +${monster.xpValue} pts`);
       continue;
