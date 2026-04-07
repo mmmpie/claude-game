@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE, COLOR_NAMES } from './constants.js?v=34';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=34';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=34';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=34';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=34';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE, COLOR_NAMES } from './constants.js?v=35';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=35';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=35';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=35';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=35';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -67,9 +67,18 @@ function initLevel(state, levelNum) {
   const grid = createGrid(rows, cols);
   state.grid = grid;
 
-  // Spawn adventurer at centre of playfield
-  const advRow = Math.floor(rows / 2);
-  const advCol = Math.floor(cols / 2);
+  grid.monsters = [];
+  grid.treasures = [];
+  grid.stairs = null;
+
+  // Pick stairs corner first so the adventurer can be placed opposite.
+  const stairsPos = pickStairsCorner(rows, cols);
+  grid.stairs = stairsPos;
+  placeEntity(grid, stairsPos.row, stairsPos.col, 'stairs', stairsPos);
+
+  // Spawn adventurer in the centre of the quarter diagonally opposite the stairs.
+  const advRow = stairsPos.row === 0 ? Math.floor(rows * 3 / 4) : Math.floor(rows / 4);
+  const advCol = stairsPos.col === 0 ? Math.floor(cols * 3 / 4) : Math.floor(cols / 4);
   const adv = levelNum === 1
     ? createAdventurer(advRow, advCol)
     : state.adventurer;
@@ -80,14 +89,6 @@ function initLevel(state, levelNum) {
   adv.alive = true;
   state.adventurer = adv;
   placeEntity(grid, advRow, advCol, 'adventurer', adv);
-
-  grid.monsters = [];
-  grid.treasures = [];
-  grid.stairs = null;
-
-  const stairsPos = pickStairsCorner(rows, cols);
-  grid.stairs = stairsPos;
-  placeEntity(grid, stairsPos.row, stairsPos.col, 'stairs', stairsPos);
 
   // Seed pieces fill from stairs corner, each a distinct colour, respecting
   // the clearance zone so the adventurer always has room to place pieces.
