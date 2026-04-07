@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE } from './constants.js?v=29';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=29';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=29';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=29';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=29';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE, COLOR_NAMES } from './constants.js?v=30';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=30';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=30';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=30';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=30';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -72,9 +72,13 @@ function initLevel(state, levelNum) {
   grid.stairs = stairsPos;
   placeEntity(grid, stairsPos.row, stairsPos.col, 'stairs', stairsPos);
 
-  // Seed the playfield — more pieces each level (capped at 6)
+  // Seed the playfield — pieces fill outward from the stairs, each a different color.
+  // More pieces each level (capped at 6).
   const seedCount = Math.min(levelNum, 6);
-  for (let i = 0; i < seedCount; i++) placeSeedPiece(state, grid);
+  const seedCandidates = buildStairsCandidates(stairsPos);
+  for (let i = 0; i < seedCount; i++) {
+    placeSeedPiece(state, grid, COLOR_NAMES[i % COLOR_NAMES.length], seedCandidates);
+  }
 
   // First piece spawns near the adventurer (piece origin = adv position offset by -1)
   state.activePiece = clampPiece({ ...makePiece(state), row: advRow - 1, col: advCol - 1 });
@@ -94,19 +98,29 @@ function pickStairsCorner() {
 }
 
 // ---------------------------------------------------------------------------
-// Seed piece — one pre-placed tetromino with forced content on every cell
+// Build candidate positions sorted by Manhattan distance from the stairs,
+// so seed pieces fill inward from the stairs corner first.
 // ---------------------------------------------------------------------------
-function placeSeedPiece(state, grid) {
-  const type  = randomType();
-  const color = randomColor();
-  // Every cell must contain a monster or treasure — unique types per piece
+function buildStairsCandidates(stairsPos) {
+  const candidates = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      candidates.push({ row: r, col: c,
+        dist: Math.abs(r - stairsPos.row) + Math.abs(c - stairsPos.col) });
+    }
+  }
+  candidates.sort((a, b) => a.dist - b.dist);
+  return candidates;
+}
+
+// ---------------------------------------------------------------------------
+// Seed piece — placed as close to the stairs as possible using the given color.
+// ---------------------------------------------------------------------------
+function placeSeedPiece(state, grid, color, candidates) {
+  const type         = randomType();
   const cellContents = generateForcedPieceContents(state.level, color);
 
-  // Try random positions; try all rotations at each — grid is nearly empty
-  // so a valid placement is found quickly
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const row = Math.floor(Math.random() * ROWS);
-    const col = Math.floor(Math.random() * COLS);
+  for (const { row, col } of candidates) {
     let piece = { type, color, rotationIndex: 0, row, col, cellContents };
     for (let r = 0; r < 4; r++) {
       if (isValidPlacement(piece, grid)) {
