@@ -1,5 +1,5 @@
-import { TETROMINOES, TETROMINO_TYPES, COLOR_NAMES, COLS, ROWS } from './constants.js?v=26';
-import { getCell, setCell } from './grid.js?v=26';
+import { TETROMINOES, TETROMINO_TYPES, COLOR_NAMES, COLS, ROWS } from './constants.js?v=28';
+import { getCell, setCell } from './grid.js?v=28';
 
 // ---------------------------------------------------------------------------
 // Create a new active piece, spawning at the center of the grid.
@@ -42,7 +42,7 @@ export function rotatePiece(piece, direction) {
 
 // ---------------------------------------------------------------------------
 // Validate that a piece can be placed at its current position.
-// Blocked by: out-of-bounds, locked cells, adventurer, monsters, stairs, treasure.
+// Blocked by: out-of-bounds, locked cells, adventurer, monsters, stairs, treasure, rocks.
 // ---------------------------------------------------------------------------
 export function isValidPlacement(piece, grid) {
   const cells = getPieceCells(piece);
@@ -52,7 +52,8 @@ export function isValidPlacement(piece, grid) {
     if (!cell) return false;
     if (cell.locked) return false;
     if (cell.entity === 'adventurer' || cell.entity === 'monster' ||
-        cell.entity === 'stairs'     || cell.entity === 'treasure') return false;
+        cell.entity === 'stairs'     || cell.entity === 'treasure' ||
+        cell.entity === 'rock') return false;
   }
   return true;
 }
