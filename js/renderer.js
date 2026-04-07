@@ -1,5 +1,5 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=29';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=29';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=31';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=31';
 
 // ---------------------------------------------------------------------------
 // Renderer state
@@ -81,7 +81,6 @@ export function render(renderer, gameState) {
   if (renderer.hudX !== null) drawHUD(ctx, renderer, gameState);
   drawOverlay(ctx, renderer, gameState);
 
-  renderer.ctx.clearRect(0, 0, canvas.width, canvas.height);
   renderer.ctx.drawImage(offscreen, 0, 0);
 }
 
