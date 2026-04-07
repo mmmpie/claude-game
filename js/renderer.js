@@ -1,13 +1,16 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=28';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=28';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=29';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=29';
 
 // ---------------------------------------------------------------------------
 // Renderer state
 // ---------------------------------------------------------------------------
 export function createRenderer(canvas) {
+  const offscreen = document.createElement('canvas');
   return {
     canvas,
     ctx: canvas.getContext('2d'),
+    offscreen,
+    offCtx: offscreen.getContext('2d'),
     cellSize: 50,
     offsetX: 0,
     offsetY: 0,
@@ -46,6 +49,8 @@ export function layoutRenderer(renderer, portrait) {
     renderer.offsetY = 0;
     renderer.hudX = gridW;
   }
+  renderer.offscreen.width  = canvas.width;
+  renderer.offscreen.height = canvas.height;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,10 +67,10 @@ export function flashCells(renderer, cells) {
 // Master render call
 // ---------------------------------------------------------------------------
 export function render(renderer, gameState) {
-  const { ctx } = renderer;
+  const { offCtx: ctx, offscreen, canvas } = renderer;
   const { grid, activePiece, adventurer } = gameState;
 
-  ctx.clearRect(0, 0, renderer.canvas.width, renderer.canvas.height);
+  ctx.clearRect(0, 0, offscreen.width, offscreen.height);
 
   drawBackground(ctx, renderer);
   drawLockedCells(ctx, renderer, grid);
@@ -75,6 +80,9 @@ export function render(renderer, gameState) {
   drawFlashEffects(ctx, renderer);
   if (renderer.hudX !== null) drawHUD(ctx, renderer, gameState);
   drawOverlay(ctx, renderer, gameState);
+
+  renderer.ctx.clearRect(0, 0, canvas.width, canvas.height);
+  renderer.ctx.drawImage(offscreen, 0, 0);
 }
 
 // ---------------------------------------------------------------------------
