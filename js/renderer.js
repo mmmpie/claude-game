@@ -1,5 +1,5 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=38';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=38';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=39';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=39';
 
 // ---------------------------------------------------------------------------
 // Renderer state
@@ -8,9 +8,11 @@ export function createRenderer(canvas) {
   const offscreen = document.createElement('canvas');
   return {
     canvas,
-    ctx: canvas.getContext('2d'),
+    // alpha:false → opaque compositing layer; no blending with page background,
+    // which eliminates the GPU-compositor flicker on CSS-scaled canvases.
+    ctx: canvas.getContext('2d', { alpha: false }),
     offscreen,
-    offCtx: offscreen.getContext('2d'),
+    offCtx: offscreen.getContext('2d', { alpha: false }),
     cellSize: 50,
     offsetX: 0,
     offsetY: 0,
@@ -35,11 +37,12 @@ export function layoutRenderer(renderer, portrait, rows = renderer.rows, cols = 
   renderer.rows = rows;
   renderer.cols = cols;
   const canvas = renderer.canvas;
+  let newW, newH;
   if (portrait) {
     const w = Math.min(window.innerWidth, 520);
     renderer.cellSize = Math.floor(w / cols);
-    canvas.width  = renderer.cellSize * cols;
-    canvas.height = renderer.cellSize * rows;
+    newW = renderer.cellSize * cols;
+    newH = renderer.cellSize * rows;
     renderer.offsetX = 0;
     renderer.offsetY = 0;
     renderer.hudX = null;
@@ -47,14 +50,18 @@ export function layoutRenderer(renderer, portrait, rows = renderer.rows, cols = 
     renderer.cellSize = Math.min(50, Math.floor(window.innerHeight * 0.9 / rows));
     const gridW = renderer.cellSize * cols;
     const gridH = renderer.cellSize * rows;
-    canvas.width  = gridW + 200;
-    canvas.height = Math.max(gridH, 500);
+    newW = gridW + 200;
+    newH = Math.max(gridH, 500);
     renderer.offsetX = 0;
     renderer.offsetY = 0;
     renderer.hudX = gridW;
   }
-  renderer.offscreen.width  = canvas.width;
-  renderer.offscreen.height = canvas.height;
+  // Only reset canvas dimensions when they actually change — assigning canvas.width/height
+  // (even to the same value) blanks the canvas and causes a one-frame flash.
+  if (canvas.width !== newW)  canvas.width  = newW;
+  if (canvas.height !== newH) canvas.height = newH;
+  if (renderer.offscreen.width  !== newW) renderer.offscreen.width  = newW;
+  if (renderer.offscreen.height !== newH) renderer.offscreen.height = newH;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +80,9 @@ export function flashCells(renderer, cells) {
 export function render(renderer, gameState) {
   const { offCtx: ctx, offscreen } = renderer;
 
-  ctx.clearRect(0, 0, offscreen.width, offscreen.height);
+  // No clearRect here — every render path (drawBackground / drawTitleScreen)
+  // fills every pixel with an opaque colour before the drawImage copy, so a
+  // clearRect would only introduce a brief transparent state for no benefit.
 
   if (gameState.phase === 'TITLE') {
     drawTitleScreen(ctx, renderer);
@@ -620,7 +629,7 @@ export function updatePortraitHUD(gameState) {
   const previewCanvas = document.getElementById('next-piece-canvas');
   if (previewCanvas && nextPiece) {
     const pctx = previewCanvas.getContext('2d');
-    pctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+    // Fill directly (no clearRect) so the canvas is never briefly transparent.
     const previewSize = 11;
     pctx.fillStyle = '#1a1a2e';
     pctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
