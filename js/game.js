@@ -338,6 +338,45 @@ function anyValidPlacement(grid, piece) {
 }
 
 // ---------------------------------------------------------------------------
+// Mouse input
+// ---------------------------------------------------------------------------
+function canvasToGrid(e) {
+  const canvas = renderer.canvas;
+  const rect   = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const px = (e.clientX - rect.left)  * scaleX - renderer.offsetX;
+  const py = (e.clientY - rect.top)   * scaleY - renderer.offsetY;
+  return {
+    col: Math.floor(px / renderer.cellSize),
+    row: Math.floor(py / renderer.cellSize),
+  };
+}
+
+function wireMouse() {
+  const canvas = renderer.canvas;
+
+  canvas.addEventListener('mousemove', e => {
+    if (!gameState || gameState.phase !== 'PLACING' || !gameState.activePiece) return;
+    const { row, col } = canvasToGrid(e);
+    const moved = movePiece(gameState.activePiece, row - gameState.activePiece.row, col - gameState.activePiece.col);
+    gameState.activePiece = clampPiece(moved);
+  });
+
+  canvas.addEventListener('mousedown', e => {
+    if (e.button === 0) {
+      e.preventDefault();
+      handleAction('place');
+    }
+  });
+
+  canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    handleAction('rotateCW');
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Keyboard input
 // ---------------------------------------------------------------------------
 function onKeyDown(e) {
@@ -495,6 +534,7 @@ export function initGame() {
   window.addEventListener('resize', applyLayout);
   document.addEventListener('keydown', onKeyDown);
   wireButtons();
+  wireMouse();
 
   // Canvas drag-to-move (touch)
   canvas.addEventListener('touchstart',  onCanvasTouchStart, { passive: false });
