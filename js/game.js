@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE, COLOR_NAMES } from './constants.js?v=32';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=32';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=32';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=32';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=32';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE, COLOR_NAMES } from './constants.js?v=33';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=33';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=33';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=33';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=33';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -177,6 +177,9 @@ function makePiece(gameState) {
 function handleAction(action) {
   if (!gameState) return;
   const { phase } = gameState;
+
+  // Any action dismisses the title screen and starts the game.
+  if (phase === 'TITLE') { startGame(); return; }
 
   if (action === 'pause') {
     if (phase === 'PLACING') { gameState.phase = 'PAUSED'; return; }
@@ -553,9 +556,17 @@ function loop(timestamp) {
       if (gameState.phase !== 'ANIMATING') pendingSteps = [];
     }
     render(renderer, gameState);
-    if (portrait) updatePortraitHUD(gameState);
+    if (portrait && gameState.phase !== 'TITLE') updatePortraitHUD(gameState);
   }
   requestAnimationFrame(loop);
+}
+
+// ---------------------------------------------------------------------------
+// Title screen
+// ---------------------------------------------------------------------------
+function showTitle() {
+  pendingSteps = [];
+  gameState = { phase: 'TITLE' };
 }
 
 // ---------------------------------------------------------------------------
@@ -591,7 +602,7 @@ export function initGame() {
   const fontSpec = '900 1em "Font Awesome 6 Free"';
   document.fonts.load(fontSpec)
     .catch(() => {}) // fallback: start anyway if load fails
-    .finally(() => { startGame(); loop(); });
+    .finally(() => { showTitle(); loop(); });
 }
 
 if (document.readyState === 'loading') {

@@ -1,5 +1,5 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=32';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=32';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=33';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=33';
 
 // ---------------------------------------------------------------------------
 // Renderer state
@@ -71,10 +71,17 @@ export function flashCells(renderer, cells) {
 // Master render call
 // ---------------------------------------------------------------------------
 export function render(renderer, gameState) {
-  const { offCtx: ctx, offscreen, canvas } = renderer;
-  const { grid, activePiece, adventurer } = gameState;
+  const { offCtx: ctx, offscreen } = renderer;
 
   ctx.clearRect(0, 0, offscreen.width, offscreen.height);
+
+  if (gameState.phase === 'TITLE') {
+    drawTitleScreen(ctx, renderer);
+    renderer.ctx.drawImage(offscreen, 0, 0);
+    return;
+  }
+
+  const { grid, activePiece, adventurer } = gameState;
 
   drawBackground(ctx, renderer);
   drawLockedCells(ctx, renderer, grid);
@@ -427,15 +434,136 @@ function drawNextPiecePreview(ctx, piece, x, y) {
 }
 
 // ---------------------------------------------------------------------------
+// Title screen
+// ---------------------------------------------------------------------------
+function drawTitleScreen(ctx, renderer) {
+  const { offscreen } = renderer;
+  const w = offscreen.width;
+  const h = offscreen.height;
+  const cx = w / 2;
+
+  // Background
+  ctx.fillStyle = '#0d0d1a';
+  ctx.fillRect(0, 0, w, h);
+
+  // Subtle grid pattern
+  ctx.strokeStyle = '#1a1a2e';
+  ctx.lineWidth = 0.5;
+  const gs = 40;
+  for (let x = 0; x <= w; x += gs) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  for (let y = 0; y <= h; y += gs) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  let y = Math.round(h * 0.07);
+
+  // Title
+  const titleSize = Math.min(56, Math.max(28, Math.floor(w * 0.1)));
+  ctx.fillStyle = '#F1C40F';
+  ctx.font = `bold ${titleSize}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('GAUNTRIS', cx, y);
+  y += titleSize + 4;
+
+  // Subtitle
+  const subSize = Math.max(10, Math.floor(titleSize * 0.28));
+  ctx.fillStyle = '#7F8C8D';
+  ctx.font = `${subSize}px monospace`;
+  ctx.fillText('dungeon descent puzzle', cx, y);
+  y += subSize + Math.round(h * 0.045);
+
+  // Goals
+  const goalSize = Math.max(9, Math.floor(titleSize * 0.26));
+  const goalLineH = goalSize + 5;
+  const goalLines = [
+    'Place coloured tetrominoes to build matching clusters.',
+    'Clear clusters to reveal monsters, treasure & hazards.',
+    'Guide the adventurer to the stairs to descend deeper.',
+  ];
+  ctx.fillStyle = '#BDC3C7';
+  ctx.font = `${goalSize}px monospace`;
+  for (const line of goalLines) {
+    ctx.fillText(line, cx, y);
+    y += goalLineH;
+  }
+  y += Math.round(h * 0.04);
+
+  // Divider
+  ctx.strokeStyle = '#2a2a4e';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(w * 0.08, y);
+  ctx.lineTo(w * 0.92, y);
+  ctx.stroke();
+  y += 10;
+
+  // Control columns
+  const colW = w / 3;
+  const ctrlTitleSize = Math.max(10, Math.floor(titleSize * 0.3));
+  const ctrlLineSize  = Math.max(9,  Math.floor(titleSize * 0.23));
+  const ctrlLineH     = ctrlLineSize + 4;
+  const boxH          = ctrlTitleSize + ctrlLineH * 3 + 20;
+
+  const controls = [
+    {
+      label: 'MOUSE',
+      lines: ['Hover to position', 'Left click to place', 'Right click to rotate'],
+    },
+    {
+      label: 'KEYBOARD',
+      lines: ['Arrows to move', 'Space to place', 'X / Z to rotate'],
+    },
+    {
+      label: 'TOUCH',
+      lines: ['Drag to position', 'Tap to rotate', 'PLACE button to drop'],
+    },
+  ];
+
+  controls.forEach(({ label, lines }, i) => {
+    const colCx = Math.round(colW * i + colW / 2);
+    const boxX  = Math.round(colW * i + 6);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.fillRect(boxX, y, colW - 12, boxH);
+
+    ctx.fillStyle = '#3498DB';
+    ctx.font = `bold ${ctrlTitleSize}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(label, colCx, y + 6);
+
+    ctx.fillStyle = '#95A5A6';
+    ctx.font = `${ctrlLineSize}px monospace`;
+    lines.forEach((line, j) => {
+      ctx.fillText(line, colCx, y + ctrlTitleSize + 10 + j * ctrlLineH);
+    });
+  });
+
+  // Pulsing "press any key" prompt
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 500);
+  ctx.globalAlpha = pulse;
+  ctx.fillStyle = '#ECF0F1';
+  const promptSize = Math.max(11, Math.floor(titleSize * 0.32));
+  ctx.font = `bold ${promptSize}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('Press any key, click, or tap to begin', cx, h - Math.round(h * 0.03));
+  ctx.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------------------
 // Overlay
 // ---------------------------------------------------------------------------
 function drawOverlay(ctx, renderer, gameState) {
   const { phase, score } = gameState;
-  if (phase === 'PLACING') return;
+  if (phase === 'PLACING' || phase === 'TITLE') return;
 
-  const { cellSize, offsetX, offsetY } = renderer;
-  const gridW = cellSize * COLS;
-  const gridH = cellSize * ROWS;
+  const { cellSize, offsetX, offsetY, rows, cols } = renderer;
+  const gridW = cellSize * cols;
+  const gridH = cellSize * rows;
   const cx = offsetX + gridW / 2;
   const cy = offsetY + gridH / 2;
 
