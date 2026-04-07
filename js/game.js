@@ -356,11 +356,17 @@ function canvasToGrid(e) {
 function wireMouse() {
   const canvas = renderer.canvas;
 
-  canvas.addEventListener('mousemove', e => {
+  // Listen on document so movement outside the canvas still updates the piece.
+  document.addEventListener('mousemove', e => {
     if (!gameState || gameState.phase !== 'PLACING' || !gameState.activePiece) return;
     const { row, col } = canvasToGrid(e);
-    const moved = movePiece(gameState.activePiece, row - gameState.activePiece.row, col - gameState.activePiece.col);
-    gameState.activePiece = clampPiece(moved);
+    const piece = gameState.activePiece;
+    // Find the minimum row/col offsets of the current rotation so the
+    // top-left visible cell tracks the cursor rather than the anchor point.
+    const cells = getPieceCells(piece);
+    const minDr = Math.min(...cells.map(c => c.row - piece.row));
+    const minDc = Math.min(...cells.map(c => c.col - piece.col));
+    gameState.activePiece = clampPiece({ ...piece, row: row - minDr, col: col - minDc });
   });
 
   canvas.addEventListener('mousedown', e => {
