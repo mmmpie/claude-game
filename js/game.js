@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE, COLOR_NAMES } from './constants.js?v=33';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=33';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=33';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=33';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=33';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE, COLOR_NAMES } from './constants.js?v=34';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=34';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=34';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=34';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=34';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -395,9 +395,8 @@ function canvasToGrid(e) {
 }
 
 function wireMouse() {
-  const canvas = renderer.canvas;
-
-  // Listen on document so movement outside the canvas still updates the piece.
+  // All three listeners are on document so they fire even when the cursor is
+  // outside the canvas (piece is clamped to the playfield edge in that case).
   document.addEventListener('mousemove', e => {
     if (!gameState || gameState.phase !== 'PLACING' || !gameState.activePiece) return;
     const { row, col } = canvasToGrid(e);
@@ -410,14 +409,14 @@ function wireMouse() {
     gameState.activePiece = clampPiece({ ...piece, row: row - minDr, col: col - minDc }, gameState.grid);
   });
 
-  canvas.addEventListener('mousedown', e => {
+  document.addEventListener('mousedown', e => {
     if (e.button === 0) {
       e.preventDefault();
       handleAction('place');
     }
   });
 
-  canvas.addEventListener('contextmenu', e => {
+  document.addEventListener('contextmenu', e => {
     e.preventDefault();
     handleAction('rotateCW');
   });
