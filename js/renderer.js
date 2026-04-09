@@ -1,16 +1,37 @@
-import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=39';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=39';
+import { COLS, ROWS, COLORS, COLORS_DARK, MONSTER_STATS, TREASURE_TYPES, ROCK, FLASH_DURATION, FA_FONT, FA_WEIGHT, FA_ICONS } from './constants.js?v=45';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=45';
 
 // ---------------------------------------------------------------------------
 // Renderer state
 // ---------------------------------------------------------------------------
 export function createRenderer(canvas) {
-  const offscreen = document.createElement('canvas');
+  // Offscreen draw buffer — a full 2D context we render every pixel into.
+  const offscreen = typeof OffscreenCanvas !== 'undefined'
+    ? new OffscreenCanvas(1, 1)
+    : document.createElement('canvas');
+
+  // Visible canvas uses an ImageBitmapRenderingContext ('bitmaprenderer').
+  // This is the spec's purpose-built atomic-presentation API: its ONLY
+  // operation, transferFromImageBitmap(), replaces the entire canvas
+  // backing store with an ImageBitmap in a single indivisible step. The
+  // compositor cannot observe a half-updated state because there is no
+  // intermediate state — unlike drawImage() on a 2D context, which mutates
+  // the existing backing store in place and can be observed mid-update on
+  // the dirty rectangle (the exact symptom you're seeing in the playfield).
+  //
+  // A canvas can only ever have ONE context type for its lifetime; once we
+  // create a 'bitmaprenderer' context, 2D operations on the visible canvas
+  // are forbidden. That's fine — blit() is the only place we touch it.
+  const bitmapRenderer = typeof canvas.getContext === 'function'
+    ? canvas.getContext('bitmaprenderer')
+    : null;
+
+  const ctx = bitmapRenderer || canvas.getContext('2d', { alpha: false });
+
   return {
     canvas,
-    // alpha:false → opaque compositing layer; no blending with page background,
-    // which eliminates the GPU-compositor flicker on CSS-scaled canvases.
-    ctx: canvas.getContext('2d', { alpha: false }),
+    ctx,
+    ctxIsBitmapRenderer: !!bitmapRenderer,
     offscreen,
     offCtx: offscreen.getContext('2d', { alpha: false }),
     cellSize: 50,
@@ -21,6 +42,35 @@ export function createRenderer(canvas) {
     cols: COLS,
     flashCells: new Map(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Atomic blit: hand the offscreen buffer to the visible canvas in one step.
+//
+// Preferred path (all modern browsers):
+//   offscreen.transferToImageBitmap()  → zero-copy handoff of the GPU texture
+//   ctx.transferFromImageBitmap(bmp)   → atomic replacement of visible canvas
+//
+// Neither operation exposes an intermediate state to the compositor.
+// ---------------------------------------------------------------------------
+function blit(renderer) {
+  const { offscreen, ctx, ctxIsBitmapRenderer } = renderer;
+  const canTransfer = typeof offscreen.transferToImageBitmap === 'function';
+
+  if (ctxIsBitmapRenderer && canTransfer) {
+    // Ideal path: atomic frame presentation.
+    ctx.transferFromImageBitmap(offscreen.transferToImageBitmap());
+    return;
+  }
+
+  // Fallback path — older browsers without bitmaprenderer or OffscreenCanvas.
+  if (canTransfer) {
+    const bmp = offscreen.transferToImageBitmap();
+    ctx.drawImage(bmp, 0, 0);
+    bmp.close();
+  } else {
+    ctx.drawImage(offscreen, 0, 0);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +136,7 @@ export function render(renderer, gameState) {
 
   if (gameState.phase === 'TITLE') {
     drawTitleScreen(ctx, renderer);
-    renderer.ctx.drawImage(offscreen, 0, 0);
+    blit(renderer);
     return;
   }
 
@@ -101,7 +151,7 @@ export function render(renderer, gameState) {
   if (renderer.hudX !== null) drawHUD(ctx, renderer, gameState);
   drawOverlay(ctx, renderer, gameState);
 
-  renderer.ctx.drawImage(offscreen, 0, 0);
+  blit(renderer);
 }
 
 // ---------------------------------------------------------------------------
@@ -271,7 +321,7 @@ function drawEntities(ctx, renderer, grid, adventurer) {
       const fontSize = Math.max(10, cellSize - 10);
 
       switch (cell.entity) {
-        case 'adventurer': drawAdventurer(ctx, x, y, cellSize); break;
+        case 'adventurer': drawAdventurer(ctx, x, y, cellSize, cell.entityRef); break;
         case 'monster':    drawMonster(ctx, x, y, cellSize, fontSize, cell.entityRef); break;
         case 'treasure':   drawTreasure(ctx, x, y, fontSize, cell.entityRef); break;
         case 'stairs':     drawStairs(ctx, x, y, fontSize); break;
@@ -281,20 +331,37 @@ function drawEntities(ctx, renderer, grid, adventurer) {
   }
 }
 
-function drawAdventurer(ctx, x, y, cellSize) {
-  const r = cellSize * 0.4;
+function drawAdventurer(ctx, x, y, cellSize, adventurer) {
+  // Shift the icon up slightly so the HP bar has room underneath, matching
+  // how monsters are rendered.
+  const iconY = y - 3;
+  const r = cellSize * 0.38;
   ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.arc(x, iconY, r, 0, Math.PI * 2);
   ctx.fillStyle = '#2c3e50';
   ctx.fill();
   ctx.strokeStyle = '#3498DB';
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.fillStyle = '#ECF0F1';
-  ctx.font = faFont(Math.max(10, cellSize - 14));
+  ctx.font = faFont(Math.max(10, cellSize - 16));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(FA_ICONS.adventurer, x, y);
+  ctx.fillText(FA_ICONS.adventurer, x, iconY);
+
+  // HP bar — same size/placement as monsters for visual consistency.
+  if (adventurer && adventurer.maxHp > 0) {
+    const barW = cellSize - 6;
+    const barH = 4;
+    const barX = x - barW / 2;
+    const barY = y + cellSize / 2 - barH - 2;
+    const pct  = Math.max(0, adventurer.hp / adventurer.maxHp);
+    ctx.fillStyle = '#333';
+    ctx.fillRect(barX, barY, barW, barH);
+    // Colour shifts red → yellow → green based on current health
+    ctx.fillStyle = pct > 0.6 ? '#2ecc71' : pct > 0.3 ? '#f1c40f' : '#e74c3c';
+    ctx.fillRect(barX, barY, barW * pct, barH);
+  }
 }
 
 function drawMonster(ctx, x, y, cellSize, fontSize, monster) {
@@ -614,30 +681,81 @@ function drawOverlay(ctx, renderer, gameState) {
 
 // ---------------------------------------------------------------------------
 // Portrait HUD (DOM)
+//
+// IMPORTANT: this runs every animation frame in portrait mode. Any DOM
+// mutation here (textContent, style.width, canvas drawing) forces a layout
+// and/or paint of #hud-top, which — because the HUD sits in the normal flex
+// flow above #game-canvas — reflows the container and repaints the
+// CSS-scaled game canvas. That is the visible flicker.
+//
+// Fix: dirty-check every field against the last value we wrote, and only
+// touch the DOM when something actually changed. Most frames will do zero
+// DOM writes.
 // ---------------------------------------------------------------------------
+const hudCache = {
+  level:         null,
+  score:         null,
+  hpText:        null,
+  hpPct:         null,
+  nextPieceKey:  null,
+};
+
+export function resetPortraitHUDCache() {
+  hudCache.level        = null;
+  hudCache.score        = null;
+  hudCache.hpText       = null;
+  hudCache.hpPct        = null;
+  hudCache.nextPieceKey = null;
+}
+
 export function updatePortraitHUD(gameState) {
   const { adventurer, level, score, nextPiece } = gameState;
-  const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
 
-  set('hud-level', `Lv ${level}`);
-  set('hud-score', `Score: ${score}`);
-  set('hud-hp', `HP ${Math.max(0,adventurer.hp)}/${adventurer.maxHp}`);
+  if (hudCache.level !== level) {
+    hudCache.level = level;
+    const e = document.getElementById('hud-level');
+    if (e) e.textContent = `Lv ${level}`;
+  }
 
-  const bar = document.getElementById('hud-hp-bar');
-  if (bar) bar.style.width = `${Math.max(0, adventurer.hp / adventurer.maxHp * 100)}%`;
+  if (hudCache.score !== score) {
+    hudCache.score = score;
+    const e = document.getElementById('hud-score');
+    if (e) e.textContent = `Score: ${score}`;
+  }
 
-  const previewCanvas = document.getElementById('next-piece-canvas');
-  if (previewCanvas && nextPiece) {
-    const pctx = previewCanvas.getContext('2d');
-    // Fill directly (no clearRect) so the canvas is never briefly transparent.
-    const previewSize = 11;
-    pctx.fillStyle = '#1a1a2e';
-    pctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
-    const tempPiece = { ...nextPiece, row: 0, col: 0 };
-    for (const { row, col } of getPieceCells(tempPiece)) {
-      if (row < 0 || row > 3 || col < 0 || col > 3) continue;
-      pctx.fillStyle = colorForName(nextPiece.color);
-      pctx.fillRect(col * previewSize + 1, row * previewSize + 1, previewSize - 2, previewSize - 2);
+  const hpText = `HP ${Math.max(0, adventurer.hp)}/${adventurer.maxHp}`;
+  if (hudCache.hpText !== hpText) {
+    hudCache.hpText = hpText;
+    const e = document.getElementById('hud-hp');
+    if (e) e.textContent = hpText;
+  }
+
+  const hpPct = Math.max(0, adventurer.hp / adventurer.maxHp * 100);
+  if (hudCache.hpPct !== hpPct) {
+    hudCache.hpPct = hpPct;
+    const bar = document.getElementById('hud-hp-bar');
+    if (bar) bar.style.width = `${hpPct}%`;
+  }
+
+  // Next-piece preview — only redraw when the piece identity actually changes.
+  // Key on type + color + rotation; cell contents are baked in at piece creation.
+  const nextPieceKey = nextPiece
+    ? `${nextPiece.type}|${nextPiece.color}|${nextPiece.rotation}`
+    : null;
+  if (hudCache.nextPieceKey !== nextPieceKey) {
+    hudCache.nextPieceKey = nextPieceKey;
+    const previewCanvas = document.getElementById('next-piece-canvas');
+    if (previewCanvas && nextPiece) {
+      const pctx = previewCanvas.getContext('2d');
+      const previewSize = 11;
+      pctx.fillStyle = '#1a1a2e';
+      pctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+      const tempPiece = { ...nextPiece, row: 0, col: 0 };
+      for (const { row, col } of getPieceCells(tempPiece)) {
+        if (row < 0 || row > 3 || col < 0 || col > 3) continue;
+        pctx.fillStyle = colorForName(nextPiece.color);
+        pctx.fillRect(col * previewSize + 1, row * previewSize + 1, previewSize - 2, previewSize - 2);
+      }
     }
   }
 }

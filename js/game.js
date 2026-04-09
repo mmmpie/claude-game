@@ -1,8 +1,8 @@
-import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE, COLOR_NAMES } from './constants.js?v=39';
-import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=39';
-import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=39';
-import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, resolveCombat, collectTreasure, logEvent } from './entities.js?v=39';
-import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD } from './renderer.js?v=39';
+import { COLS, ROWS, SCORE, CLUSTER_MIN_SIZE, COLOR_NAMES } from './constants.js?v=45';
+import { createGrid, findClusters, clearClusters, placeEntity, removeEntity, getCell, generatePieceContents, generateForcedPieceContents } from './grid.js?v=45';
+import { createPiece, getPieceCells, movePiece, rotatePiece, isValidPlacement, lockPiece, randomType, randomColor, clampPiece } from './tetromino.js?v=45';
+import { createAdventurer, createMonster, createTreasure, runAdventurerTurn, runSingleMonsterTurn, collectTreasure, logEvent } from './entities.js?v=45';
+import { createRenderer, layoutRenderer, render, flashCells, updatePortraitHUD, resetPortraitHUDCache } from './renderer.js?v=45';
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -13,6 +13,7 @@ let portrait     = false;
 let pendingSteps = [];   // step queue for frame-by-frame turn animation
 let lastAutoTick = 0;   // timestamp of last automatic entity movement
 const AUTO_TICK_MS = 1000;
+let pendingPlace = false; // true when player tapped/clicked during ANIMATING
 
 // Drag state for canvas touch movement
 let dragActive    = false;
@@ -182,6 +183,10 @@ function handleAction(action) {
   // Any action dismisses the title screen and starts the game.
   if (phase === 'TITLE') { startGame(); return; }
 
+  // Buffer a place request that arrives while entities are animating;
+  // it will fire as soon as the phase returns to PLACING.
+  if (phase === 'ANIMATING' && action === 'place') { pendingPlace = true; return; }
+
   if (action === 'pause') {
     if (phase === 'PLACING') { gameState.phase = 'PAUSED'; return; }
     if (phase === 'PAUSED')  { gameState.phase = 'PLACING'; return; }
@@ -215,30 +220,31 @@ function handleAction(action) {
 }
 
 // ---------------------------------------------------------------------------
-// Queue entity movement steps (adventurer + monsters + combat).
-// onDone() is called in the final step after combat resolves.
+// Queue entity movement steps (adventurer + monsters).
+//
+// Combat is now folded into the adventurer's step: runAdventurerTurn either
+// fights one committed target (simultaneous damage) or moves — never both.
+// There is no separate resolveCombat phase anymore.
 // ---------------------------------------------------------------------------
 function queueEntityMoves(onDone) {
   const { grid } = gameState;
   const monstersThisTurn = grid.monsters.filter(m => m.alive);
   gameState.phase = 'ANIMATING';
   pendingSteps = [
-    // Step 1 — move adventurer
+    // Step 1 — move or fight (adventurer's turn)
     () => {
       const { trapped } = runAdventurerTurn(gameState.adventurer, grid, gameState);
       if (trapped) logEvent(gameState, 'Adventurer is trapped!');
       checkWin();
     },
-    // Steps 2…N — move each monster individually
+    // Steps 2…N — each monster moves individually
     ...monstersThisTurn.map(monster => () => {
       if (gameState.phase !== 'ANIMATING') return;
       runSingleMonsterTurn(monster, grid, gameState);
     }),
-    // Final step — resolve combat then call onDone
+    // Final step — finalise turn
     () => {
       if (gameState.phase !== 'ANIMATING') return;
-      resolveCombat(grid, gameState);
-      if (gameState.phase === 'GAME_OVER') return;
       if (checkWin()) return;
       onDone();
     },
@@ -465,19 +471,19 @@ function wireButtons() {
 // ---------------------------------------------------------------------------
 
 // Convert a client-space touch coordinate to a grid {row, col}.
-// Returns null when the touch is outside the grid area.
+// Always returns a position (no null) — callers decide whether to act on
+// out-of-bounds values.
 function screenToGrid(clientX, clientY) {
   const canvas = renderer.canvas;
   const rect   = canvas.getBoundingClientRect();
-  // Account for CSS scaling of the canvas element
   const scaleX = canvas.width  / rect.width;
   const scaleY = canvas.height / rect.height;
   const cx = (clientX - rect.left) * scaleX;
   const cy = (clientY - rect.top)  * scaleY;
-  const col = Math.floor((cx - renderer.offsetX) / renderer.cellSize);
-  const row = Math.floor((cy - renderer.offsetY) / renderer.cellSize);
-  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return null;
-  return { row, col };
+  return {
+    col: Math.floor((cx - renderer.offsetX) / renderer.cellSize),
+    row: Math.floor((cy - renderer.offsetY) / renderer.cellSize),
+  };
 }
 
 function onCanvasTouchStart(e) {
@@ -485,9 +491,11 @@ function onCanvasTouchStart(e) {
   const piece = gameState.activePiece;
   if (!piece) return;
   e.preventDefault();
-  const t   = e.touches[0];
-  const pos = screenToGrid(t.clientX, t.clientY);
-  if (!pos) return;
+  const t    = e.touches[0];
+  const pos  = screenToGrid(t.clientX, t.clientY);
+  const grid = gameState.grid;
+  // Only begin a drag when the initial touch is inside the live grid area.
+  if (pos.col < 0 || pos.col >= grid.cols || pos.row < 0 || pos.row >= grid.rows) return;
   dragActive    = true;
   dragMoved     = false;
   dragStartX    = t.clientX;
@@ -507,11 +515,11 @@ function onCanvasTouchMove(e) {
     if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     dragMoved = true;
   }
-  const pos = screenToGrid(t.clientX, t.clientY);
-  if (!pos) return;
-  const piece    = gameState.activePiece;
-  const newPiece = { ...piece, row: pos.row - dragOffsetRow, col: pos.col - dragOffsetCol };
-  gameState.activePiece = clampPiece(newPiece, gameState.grid);
+  const pos   = screenToGrid(t.clientX, t.clientY);
+  const piece = gameState.activePiece;
+  // No clamping for touch — the piece follows the finger freely; cells that
+  // land outside the grid are skipped by the renderer and fail isValidPlacement.
+  gameState.activePiece = { ...piece, row: pos.row - dragOffsetRow, col: pos.col - dragOffsetCol };
 }
 
 function onCanvasTouchEnd() {
@@ -555,6 +563,11 @@ function loop(timestamp) {
       // If a step changed the phase (win / game-over), discard remaining steps
       if (gameState.phase !== 'ANIMATING') pendingSteps = [];
     }
+    // Fire a buffered place action now that the playfield has settled.
+    if (gameState.phase === 'PLACING' && pendingPlace) {
+      pendingPlace = false;
+      placePiece();
+    }
     render(renderer, gameState);
     if (portrait && gameState.phase !== 'TITLE') updatePortraitHUD(gameState);
   }
@@ -566,6 +579,8 @@ function loop(timestamp) {
 // ---------------------------------------------------------------------------
 function showTitle() {
   pendingSteps = [];
+  pendingPlace = false;
+  resetPortraitHUDCache();
   gameState = { phase: 'TITLE' };
 }
 
@@ -574,7 +589,9 @@ function showTitle() {
 // ---------------------------------------------------------------------------
 function startGame() {
   pendingSteps = [];
+  pendingPlace = false;
   lastAutoTick = Infinity; // don't auto-tick until first piece is placed
+  resetPortraitHUDCache();
   gameState = newGameState();
   initLevel(gameState, 1);
 }

@@ -1,4 +1,4 @@
-import { COLS, ROWS, CLUSTER_MIN_SIZE, COLOR_MONSTER } from './constants.js?v=28';
+import { COLS, ROWS, CLUSTER_MIN_SIZE, COLOR_MONSTER } from './constants.js?v=44';
 
 // ---------------------------------------------------------------------------
 // Cell factory
@@ -160,16 +160,31 @@ export function clearClusters(grid, clusters) {
 
 // ---------------------------------------------------------------------------
 // Passability check
+//
+// Adventurer pathfinding: may route THROUGH monster cells. The adventurer's
+//   movement step still refuses to actually enter a monster cell — it stops
+//   adjacent so that next turn's combat phase resolves the kill before the
+//   path continues. Treasure cells are also passable (collected in passing).
+//
+// Monster pathfinding: cannot enter cells occupied by another monster, the
+//   adventurer, the stairs, or a rock, but CAN route through treasure cells
+//   (collecting items along the way).
 // ---------------------------------------------------------------------------
 export function isPassable(grid, row, col, forEntity) {
   if (row < 0 || row >= grid.rows || col < 0 || col >= grid.cols) return false;
   const cell = grid.cells[row][col];
   if (cell.locked) return false;
   if (cell.entity === 'rock') return false;
+
+  if (forEntity === 'adventurer') {
+    // Monsters, treasure, stairs, and empty cells are all routable for the
+    // adventurer. Walls are already filtered by the `locked` check above.
+    return true;
+  }
+
+  // Monster pathfinding
   if (cell.entity === 'monster') return false;
-  // Monsters cannot enter cells occupied by the adventurer, stairs, or other monsters,
-  // but CAN route through treasure cells, collecting items along the way.
-  if (forEntity === 'monster' && cell.entity && cell.entity !== 'treasure') return false;
+  if (cell.entity && cell.entity !== 'treasure') return false;
   return true;
 }
 

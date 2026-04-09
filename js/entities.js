@@ -1,7 +1,7 @@
-import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=28';
-import { placeEntity, removeEntity, getCell } from './grid.js?v=28';
-import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=28';
-import { getPieceCells, isValidPlacement } from './tetromino.js?v=28';
+import { ADVENTURER_BASE, MONSTER_STATS, TREASURE_TYPES, ADVENTURER_MOVES, LOG_MAX } from './constants.js?v=44';
+import { placeEntity, removeEntity, getCell } from './grid.js?v=44';
+import { bfs, findNearest, isAdjacentCoords } from './pathfinding.js?v=44';
+import { getPieceCells, isValidPlacement } from './tetromino.js?v=44';
 
 // ---------------------------------------------------------------------------
 // Adventurer
@@ -16,6 +16,7 @@ export function createAdventurer(row, col) {
     gold: 0,
     alive: true,
     currentGoal: null,  // {row,col} of current navigation target — used by renderer
+    combatTarget: null, // monster being fought this engagement — committed until it dies
   };
 }
 
@@ -56,10 +57,48 @@ export function createTreasure(treasureType, value, row, col) {
 // ---------------------------------------------------------------------------
 // Adventurer AI turn
 // Returns { moved: bool, trapped: bool }
+//
+// Each turn the adventurer does exactly one of:
+//   (A) Continue fighting a committed combat target (highest priority —
+//       the adventurer has engaged this monster and will not disengage
+//       until it dies, even if other monsters become adjacent).
+//   (B) Start fighting a newly-adjacent monster (MUST fight — the rules
+//       forbid moving while in melee).
+//   (C) Move up to ADVENTURER_MOVES steps along the planned path.
+//
+// Combat in (A) and (B) is a single simultaneous exchange: both sides
+// compute damage from pre-combat stats and apply it together, so a
+// mutually-lethal round kills both parties.
+//
+// Pathfinding treats monster cells as passable (see grid.isPassable) so
+// that the adventurer plans routes THROUGH monsters. The movement loop
+// still refuses to actually step into a monster cell — it stops on the
+// adjacent cell, and the next turn's combat path (A/B) resolves the kill.
 // ---------------------------------------------------------------------------
 export function runAdventurerTurn(adv, grid, gameState) {
   if (!adv.alive) return { moved: false, trapped: false };
 
+  // ── (A) Continue committed combat ───────────────────────────────────────
+  if (adv.combatTarget && adv.combatTarget.alive &&
+      isAdjacentCoords(adv.row, adv.col,
+                       adv.combatTarget.row, adv.combatTarget.col)) {
+    adv.currentGoal = { row: adv.combatTarget.row, col: adv.combatTarget.col };
+    fightRound(adv, adv.combatTarget, grid, gameState);
+    return { moved: false, trapped: false };
+  }
+  // Drop any stale commitment (target died or is no longer adjacent)
+  adv.combatTarget = null;
+
+  // ── (B) Must-fight: any adjacent monster ────────────────────────────────
+  const newTarget = pickAdjacentMonsterTarget(adv, grid, gameState);
+  if (newTarget) {
+    adv.combatTarget = newTarget;
+    adv.currentGoal  = { row: newTarget.row, col: newTarget.col };
+    fightRound(adv, newTarget, grid, gameState);
+    return { moved: false, trapped: false };
+  }
+
+  // ── (C) Move along planned path ─────────────────────────────────────────
   const blocked = activePieceBlocked(gameState);
   let movesLeft = ADVENTURER_MOVES;
   let moved = false;
@@ -68,16 +107,15 @@ export function runAdventurerTurn(adv, grid, gameState) {
     const step = computeNextStep(adv, grid, gameState, blocked);
     if (!step) break;
 
-    // Check what's at the destination before moving
     const destCell = getCell(grid, step.row, step.col);
 
-    // Never step into a monster's cell — stay adjacent and let combat resolve
+    // Never step into a monster's cell — the path may route through monsters
+    // but the actual move stops adjacent so next turn's (B) resolves the kill.
     if (destCell && destCell.entity === 'monster') break;
 
     const destTreasure = (destCell && destCell.entity === 'treasure') ? destCell.entityRef : null;
     const isStairs     = destCell && destCell.entity === 'stairs';
 
-    // Move adventurer
     removeEntity(grid, adv.row, adv.col);
     adv.row = step.row;
     adv.col = step.col;
@@ -89,9 +127,73 @@ export function runAdventurerTurn(adv, grid, gameState) {
     if (isStairs) break;
   }
 
-  // Check trapped (no passable neighbors)
   const trapped = !moved && !hasPassableNeighbor(adv, grid);
   return { moved, trapped };
+}
+
+// ---------------------------------------------------------------------------
+// Pick the best adjacent monster to engage.
+// Preference order:
+//   1. A monster sitting on the adventurer's planned next step (fighting it
+//      also makes progress toward the goal).
+//   2. The weakest adjacent monster (lowest HP) — quickest to clear.
+// ---------------------------------------------------------------------------
+function pickAdjacentMonsterTarget(adv, grid, gameState) {
+  const adjacent = [];
+  for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+    const cell = getCell(grid, adv.row + dr, adv.col + dc);
+    if (cell && cell.entity === 'monster' && cell.entityRef && cell.entityRef.alive) {
+      adjacent.push(cell.entityRef);
+    }
+  }
+  if (adjacent.length === 0) return null;
+  if (adjacent.length === 1) return adjacent[0];
+
+  // Prefer a monster on the planned path
+  const blocked = activePieceBlocked(gameState);
+  const step = computeNextStep(adv, grid, gameState, blocked);
+  if (step) {
+    const onPath = adjacent.find(m => m.row === step.row && m.col === step.col);
+    if (onPath) return onPath;
+  }
+
+  // Else the weakest
+  return adjacent.slice().sort((a, b) => a.hp - b.hp)[0];
+}
+
+// ---------------------------------------------------------------------------
+// Simultaneous combat round.
+// Both damages are computed from the PRE-hit stats of both parties, then
+// both are applied. A mutually-lethal round kills the monster AND ends the
+// game — the adventurer lands their killing blow at the same instant the
+// monster lands theirs.
+// ---------------------------------------------------------------------------
+function fightRound(adv, monster, grid, gameState) {
+  const dmgToMonster = Math.max(1, adventurerAttack(adv)  - monster.defense);
+  const dmgToAdv     = Math.max(1, monster.attack - adventurerDefense(adv));
+
+  monster.hp -= dmgToMonster;
+  adv.hp     -= dmgToAdv;
+
+  logEvent(gameState,
+    `Trade: you -${dmgToAdv} HP, ${monster.type} -${dmgToMonster} HP ` +
+    `(${Math.max(0, adv.hp)}/${adv.maxHp} vs ${Math.max(0, monster.hp)}/${monster.maxHp})`);
+
+  if (monster.hp <= 0) {
+    monster.alive = false;
+    removeEntity(grid, monster.row, monster.col);
+    monsterDropInventory(monster, grid, gameState);
+    gameState.score += monster.xpValue;
+    logEvent(gameState, `${capitalize(monster.type)} defeated! +${monster.xpValue} pts`);
+    grid.monsters = grid.monsters.filter(m => m.alive);
+    adv.combatTarget = null;
+  }
+
+  if (adv.hp <= 0) {
+    adv.alive = false;
+    gameState.phase = 'GAME_OVER';
+    logEvent(gameState, 'The adventurer has fallen!');
+  }
 }
 
 function computeNextStep(adv, grid, gameState, blocked) {
@@ -316,43 +418,12 @@ export function runMonstersTurn(grid, gameState) {
 // ---------------------------------------------------------------------------
 // Combat resolution
 // ---------------------------------------------------------------------------
-export function resolveCombat(grid, gameState) {
-  const adv = gameState.adventurer;
-  if (!adv.alive) return;
-
-  for (const monster of grid.monsters) {
-    if (!monster.alive) continue;
-    if (!isAdjacentCoords(adv.row, adv.col, monster.row, monster.col)) continue;
-
-    // Adventurer attacks monster
-    const dmgToMonster = Math.max(1, adventurerAttack(adv) - monster.defense);
-    monster.hp -= dmgToMonster;
-    logEvent(gameState, `Hit ${monster.type} for ${dmgToMonster} dmg (${Math.max(0,monster.hp)} HP left)`);
-
-    if (monster.hp <= 0) {
-      monster.alive = false;
-      removeEntity(grid, monster.row, monster.col);
-      monsterDropInventory(monster, grid, gameState);
-      gameState.score += monster.xpValue;
-      logEvent(gameState, `${capitalize(monster.type)} defeated! +${monster.xpValue} pts`);
-      continue;
-    }
-
-    // Monster counter-attacks
-    const dmgToAdv = Math.max(1, monster.attack - adventurerDefense(adv));
-    adv.hp -= dmgToAdv;
-    logEvent(gameState, `${capitalize(monster.type)} hits for ${dmgToAdv} dmg (${Math.max(0,adv.hp)} HP left)`);
-
-    if (adv.hp <= 0) {
-      adv.alive = false;
-      gameState.phase = 'GAME_OVER';
-      logEvent(gameState, 'The adventurer has fallen!');
-      return;
-    }
-  }
-
-  // Remove dead monsters from array
-  grid.monsters = grid.monsters.filter(m => m.alive);
+// Combat is now folded into runAdventurerTurn (simultaneous, committed, one
+// target per turn). This function is retained as a no-op so external callers
+// that still import it don't break; it will be removed once callers update.
+// ---------------------------------------------------------------------------
+export function resolveCombat(/* grid, gameState */) {
+  /* combat is handled inside runAdventurerTurn's fightRound */
 }
 
 // ---------------------------------------------------------------------------

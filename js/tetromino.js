@@ -1,5 +1,5 @@
-import { TETROMINOES, TETROMINO_TYPES, COLOR_NAMES, COLS, ROWS } from './constants.js?v=28';
-import { getCell, setCell } from './grid.js?v=28';
+import { TETROMINOES, TETROMINO_TYPES, COLOR_NAMES, COLS, ROWS } from './constants.js?v=44';
+import { getCell, setCell } from './grid.js?v=44';
 
 // ---------------------------------------------------------------------------
 // Create a new active piece, spawning at the center of the grid.

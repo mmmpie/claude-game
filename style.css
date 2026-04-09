@@ -24,19 +24,51 @@ html, body {
   display: block;
   image-rendering: pixelated;
   touch-action: none;
+
+  /* Opaque fallback background — matches the in-canvas playfield colour.   */
+  /* If the compositor ever shows the canvas momentarily empty during a     */
+  /* backing-bitmap swap, the user sees the playfield colour, not black.    */
+  background-color: #1a1a2e;
+
+  /* Force the canvas onto its own GPU compositor layer. transferFromImage  */
+  /* Bitmap() is only truly atomic when the canvas has a dedicated layer    */
+  /* — otherwise the browser must re-rasterise the parent's shared layer    */
+  /* to reflect the new backing bitmap, and that re-raster is visible.      */
+  /* translateZ(0) + will-change: transform together force layer promotion  */
+  /* in every modern engine (Blink, Gecko, WebKit).                         */
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+
+  /* Isolate paint so HUD/button-panel repaints above and below cannot      */
+  /* force the canvas's composite layer to be repainted as a side effect.   */
+  contain: layout paint;
 }
 
 /* ─── Portrait HUD ─────────────────────────────────────────────────────── */
 #hud-top {
   width: 100%;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;          /* never wrap — keep HUD a single fixed row */
   align-items: center;
   gap: 8px;
   padding: 4px 8px;
   background: #0d0d1a;
   font-size: 13px;
   color: #bdc3c7;
+  /* Fixed height so text-content changes can never resize the HUD and       */
+  /* shift the canvas below it.                                              */
+  height: 56px;
+  min-height: 56px;
+  /* Isolate layout + paint so any DOM mutation inside the HUD cannot        */
+  /* invalidate layout or trigger a repaint of the game canvas sibling.      */
+  contain: layout paint;
 }
+
+/* Lock each text field's width so "Score: 99" → "Score: 100" cannot reflow  */
+/* the HUD row. Pseudo table-like layout with overflow hidden.               */
+#hud-top #hud-level  { flex: 0 0 auto; min-width: 40px; white-space: nowrap; overflow: hidden; }
+#hud-top #hud-score  { flex: 0 0 auto; min-width: 92px; white-space: nowrap; overflow: hidden; }
+#hud-top #hud-hp     { flex: 0 0 auto; min-width: 72px; white-space: nowrap; overflow: hidden; }
 
 #hud-hp-bar-wrap {
   flex: 1;
@@ -51,7 +83,8 @@ html, body {
   height: 100%;
   width: 100%;
   background: #e74c3c;
-  transition: width 0.2s;
+  /* No transition — an animated width causes continuous reflow/repaint of  */
+  /* the HUD every frame, which propagates a repaint to the game canvas.    */
   border-radius: 4px;
 }
 
